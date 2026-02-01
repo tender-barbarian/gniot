@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -226,5 +227,107 @@ func TestActionsRoutes_E2E(t *testing.T) {
 		defer resp.Body.Close() // nolint
 
 		require.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+}
+
+func createResource(t *testing.T, path, body string) int {
+	t.Helper()
+	resp, err := http.Post(baseURL+path, "application/json", bytes.NewBufferString(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close() // nolint
+
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	var result map[string]int
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	return result["id"]
+}
+
+func TestExecuteRoute_E2E(t *testing.T) {
+	// Start mock device server for success test
+	mockDevice := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mockDevice.Close()
+
+	// Setup
+	actionID := createResource(t, "/actions", `{"name":"test-action","path":"toggle","params":"{}"}`)
+	deviceID := createResource(t, "/devices", fmt.Sprintf(`{"name":"mock-device","type":"sensor","chip":"esp32","board":"devkit","ip":"%s","actions":"[%d]"}`, mockDevice.Listener.Addr().String(), actionID))
+	unreachableDeviceID := createResource(t, "/devices", fmt.Sprintf(`{"name":"mock-unreachable-device","type":"sensor","chip":"esp32","board":"devkit","ip":"127.0.0.1:9999","actions":"[%d]"}`, actionID))
+
+	t.Run("POST /execute with missing params returns 400", func(t *testing.T) {
+		resp, err := http.Post(baseURL+"/execute", "application/json", bytes.NewBufferString(`{}`))
+		if err != nil {
+			checkServerError(t, err)
+		}
+		defer resp.Body.Close() // nolint
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("POST /execute with non-existent device returns 500", func(t *testing.T) {
+		body := `{"deviceId": 99999, "actionId": 1}`
+		resp, err := http.Post(baseURL+"/execute", "application/json", bytes.NewBufferString(body))
+		if err != nil {
+			checkServerError(t, err)
+		}
+		defer resp.Body.Close() // nolint
+
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	})
+
+	t.Run("POST /execute with action not belonging to device returns 500", func(t *testing.T) {
+		// Create another action not assigned to device
+		body := `{"name":"other-action","path":"other","params":"{}"}`
+		resp, err := http.Post(baseURL+"/actions", "application/json", bytes.NewBufferString(body))
+		if err != nil {
+			checkServerError(t, err)
+		}
+		defer resp.Body.Close() // nolint
+
+		var result map[string]int
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		otherActionID := result["id"]
+
+		// Try to execute with action not assigned to device
+		body = fmt.Sprintf(`{"deviceId": %d, "actionId": %d}`, deviceID, otherActionID)
+		resp, err = http.Post(baseURL+"/execute", "application/json", bytes.NewBufferString(body))
+		if err != nil {
+			checkServerError(t, err)
+		}
+		defer resp.Body.Close() // nolint
+
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	})
+
+	t.Run("POST /execute succeeds", func(t *testing.T) {
+		body := fmt.Sprintf(`{"deviceId": %d, "actionId": %d}`, deviceID, actionID)
+		resp, err := http.Post(baseURL+"/execute", "application/json", bytes.NewBufferString(body))
+		if err != nil {
+			checkServerError(t, err)
+		}
+		defer resp.Body.Close() // nolint
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("POST /execute with unreachable device returns 500", func(t *testing.T) {
+		body := fmt.Sprintf(`{"deviceId": %d, "actionId": %d}`, unreachableDeviceID, actionID)
+		resp, err := http.Post(baseURL+"/execute", "application/json", bytes.NewBufferString(body))
+		if err != nil {
+			checkServerError(t, err)
+		}
+		defer resp.Body.Close() // nolint
+
+		// Device is unreachable (127.0.0.1:9999), so should return 500
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	})
 }

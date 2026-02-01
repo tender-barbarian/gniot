@@ -12,11 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tender-barbarian/gniot/repository/env"
+	"github.com/tender-barbarian/gniot/repository"
 	"github.com/tender-barbarian/gniot/repository/models"
 	"github.com/tender-barbarian/gniot/server/handlers"
 	"github.com/tender-barbarian/gniot/server/middleware"
 	"github.com/tender-barbarian/gniot/server/routes"
+	"github.com/tender-barbarian/gniot/service"
 	gocrud "github.com/tender-barbarian/go-crud"
 )
 
@@ -35,7 +36,7 @@ func Run() error {
 	dbPath := getEnv("DB_PATH", "./gniot.db")
 	migrationsPath := getEnv("MIGRATIONS_PATH", "file://../db/migrations")
 
-	db, err := env.NewDBConnection(dbPath, migrationsPath)
+	db, err := repository.NewDBConnection(dbPath, migrationsPath)
 	if err != nil {
 		return fmt.Errorf("starting new DB connection: %v", err)
 	}
@@ -47,13 +48,17 @@ func Run() error {
 	// Initialize helpers
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
+	// Initialize service
+	service := service.NewService(devicesRepo, actionsRepo)
+
 	// Initialize handlers and routes
 	mux := http.NewServeMux()
 	mux.Handle("/", http.NotFoundHandler())
-	h := handlers.NewHandlers(logger)
-	mux = routes.RegisterCustomRoutes(mux, h)
-	mux = routes.RegisterGenericRoutes(ctx, devicesRepo, mux, h)
-	mux = routes.RegisterGenericRoutes(ctx, actionsRepo, mux, h)
+	errorHandler := handlers.NewErrorHandler(logger)
+	customHandlers := handlers.NewCustomHandlers(errorHandler, service)
+	mux = routes.RegisterCustomRoutes(mux, customHandlers)
+	mux = routes.RegisterGenericRoutes(ctx, devicesRepo, mux, errorHandler)
+	mux = routes.RegisterGenericRoutes(ctx, actionsRepo, mux, errorHandler)
 
 	// Initialize middleware
 	var wrappedMux http.Handler = mux
