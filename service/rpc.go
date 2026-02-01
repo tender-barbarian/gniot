@@ -11,13 +11,13 @@ import (
 
 // JSONRPCRequest represents a JSON-RPC 2.0 request
 type JSONRPCRequest struct {
-	JSONRPC string      `json:"jsonrpc"`
-	Method  string      `json:"method"`
-	Params  any `json:"params,omitempty"`
-	ID      int         `json:"id"`
+	JSONRPC string `json:"jsonrpc"`
+	Method  string `json:"method"`
+	Params  any    `json:"params,omitempty"`
+	ID      int    `json:"id"`
 }
 
-func (s *Service[M, N]) callJSONRPC(ctx context.Context, ip, method, params string) error {
+func (s *Service[M, N, O]) callJSONRPC(ctx context.Context, ip, method, params string) error {
 	var paramsObj interface{}
 	if params != "" {
 		if err := json.Unmarshal([]byte(params), &paramsObj); err != nil {

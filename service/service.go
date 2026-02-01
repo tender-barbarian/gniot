@@ -5,14 +5,16 @@ import (
 	gocrud "github.com/tender-barbarian/go-crud"
 )
 
-type Service[M, N gocrud.Model] struct {
+type Service[M, N, O gocrud.Model] struct {
 	devicesRepo repository.GenericRepo[M]
 	actionsRepo repository.GenericRepo[N]
+	jobsRepo    repository.GenericRepo[O]
 }
 
-func NewService[M, N gocrud.Model](devicesRepo repository.GenericRepo[M], actionsRepo repository.GenericRepo[N]) *Service[M, N] {
-	return &Service[M, N]{
+func NewService[M, N, O gocrud.Model](devicesRepo repository.GenericRepo[M], actionsRepo repository.GenericRepo[N], jobsRepo repository.GenericRepo[O]) *Service[M, N, O] {
+	return &Service[M, N, O]{
 		devicesRepo: devicesRepo,
 		actionsRepo: actionsRepo,
+		jobsRepo:    jobsRepo,
 	}
 }

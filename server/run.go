@@ -43,13 +43,14 @@ func Run() error {
 	defer db.Close() // nolint
 
 	devicesRepo := gocrud.NewGenericRepository(db, "devices", func() *models.Device { return &models.Device{} })
-	actionsRepo:= gocrud.NewGenericRepository(db, "actions", func() *models.Action { return &models.Action{} })
+	actionsRepo := gocrud.NewGenericRepository(db, "actions", func() *models.Action { return &models.Action{} })
+	jobsRepo := gocrud.NewGenericRepository(db, "jobs", func() *models.Job { return &models.Job{} })
 
 	// Initialize helpers
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	// Initialize service
-	service := service.NewService(devicesRepo, actionsRepo)
+	service := service.NewService(devicesRepo, actionsRepo, jobsRepo)
 
 	// Initialize handlers and routes
 	mux := http.NewServeMux()
@@ -59,6 +60,7 @@ func Run() error {
 	mux = routes.RegisterCustomRoutes(mux, customHandlers)
 	mux = routes.RegisterGenericRoutes(ctx, devicesRepo, mux, errorHandler)
 	mux = routes.RegisterGenericRoutes(ctx, actionsRepo, mux, errorHandler)
+	mux = routes.RegisterGenericRoutes(ctx, jobsRepo, mux, errorHandler)
 
 	// Initialize middleware
 	var wrappedMux http.Handler = mux
@@ -75,6 +77,21 @@ func Run() error {
 		log.Printf("listening on %s\n", httpServer.Addr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			fmt.Fprintf(os.Stderr, "listening and serving requests: %s\n", err)
+		}
+	}()
+
+	// Start job runner
+	jobErrCh := make(chan error, 10)
+	jobsInterval, err := time.ParseDuration(getEnv("JOBS_INTERVAL", "1m"))
+	if err != nil {
+		return fmt.Errorf("parsing JOBS_INTERVAL: %w", err)
+	}
+	go service.RunJobs(ctx, logger, jobsInterval, jobErrCh)
+
+	// Handle job errors
+	go func() {
+		for err := range jobErrCh {
+			logger.Error("job runner error", "error", err)
 		}
 	}()
 

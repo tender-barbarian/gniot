@@ -60,12 +60,34 @@ func (m *mockActionRepo) GetTable() string {
 	return "actions"
 }
 
+type mockJobRepo struct{}
+
+func (m *mockJobRepo) Create(ctx context.Context, model *models.Job) (int, error) {
+	return 0, nil
+}
+func (m *mockJobRepo) Get(ctx context.Context, id int) (*models.Job, error) {
+	return nil, nil
+}
+func (m *mockJobRepo) GetAll(ctx context.Context) ([]*models.Job, error) {
+	return nil, nil
+}
+func (m *mockJobRepo) Delete(ctx context.Context, id int) error {
+	return nil
+}
+func (m *mockJobRepo) Update(ctx context.Context, model *models.Job, id int) error {
+	return nil
+}
+func (m *mockJobRepo) GetTable() string {
+	return "jobs"
+}
+
 func TestExecute(t *testing.T) {
 	ctx := context.Background()
 	t.Run("device not found", func(t *testing.T) {
 		deviceRepo := &mockDeviceRepo{err: errors.New("not found")}
 		actionRepo := &mockActionRepo{}
-		service := NewService(deviceRepo, actionRepo)
+		jobRepo := &mockJobRepo{}
+		service := NewService(deviceRepo, actionRepo, jobRepo)
 
 		err := service.Execute(ctx, 1, 1)
 
@@ -75,7 +97,8 @@ func TestExecute(t *testing.T) {
 	t.Run("action not found", func(t *testing.T) {
 		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, Actions: "[1]"}}
 		actionRepo := &mockActionRepo{err: errors.New("not found")}
-		service := NewService(deviceRepo, actionRepo)
+		jobRepo := &mockJobRepo{}
+		service := NewService(deviceRepo, actionRepo, jobRepo)
 
 		err := service.Execute(ctx, 1, 1)
 
@@ -85,7 +108,8 @@ func TestExecute(t *testing.T) {
 	t.Run("invalid device actions JSON", func(t *testing.T) {
 		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, Actions: "invalid"}}
 		actionRepo := &mockActionRepo{action: &models.Action{ID: 1}}
-		service := NewService(deviceRepo, actionRepo)
+		jobRepo := &mockJobRepo{}
+		service := NewService(deviceRepo, actionRepo, jobRepo)
 
 		err := service.Execute(ctx, 1, 1)
 
@@ -95,7 +119,8 @@ func TestExecute(t *testing.T) {
 	t.Run("action does not belong to device", func(t *testing.T) {
 		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, Actions: "[2,3]"}}
 		actionRepo := &mockActionRepo{action: &models.Action{ID: 1}}
-		service := NewService(deviceRepo, actionRepo)
+		jobRepo := &mockJobRepo{}
+		service := NewService(deviceRepo, actionRepo, jobRepo)
 
 		err := service.Execute(ctx, 1, 1)
 
@@ -123,7 +148,8 @@ func TestExecute(t *testing.T) {
 		ip := server.Listener.Addr().String()
 		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: ip, Actions: "[1,2]"}}
 		actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: "toggle", Params: `{"pin":5}`}}
-		service := NewService(deviceRepo, actionRepo)
+		jobRepo := &mockJobRepo{}
+		service := NewService(deviceRepo, actionRepo, jobRepo)
 
 		err := service.Execute(ctx, 1, 1)
 		if err != nil {
@@ -147,7 +173,8 @@ func TestExecute(t *testing.T) {
 		ip := server.Listener.Addr().String()
 		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: ip, Actions: "[1]"}}
 		actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: "status", Params: ""}}
-		service := NewService(deviceRepo, actionRepo)
+		jobRepo := &mockJobRepo{}
+		service := NewService(deviceRepo, actionRepo, jobRepo)
 
 		err := service.Execute(ctx, 1, 1)
 		if err != nil {
@@ -164,7 +191,8 @@ func TestExecute(t *testing.T) {
 		ip := server.Listener.Addr().String()
 		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: ip, Actions: "[1]"}}
 		actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: "toggle", Params: `{}`}}
-		service := NewService(deviceRepo, actionRepo)
+		jobRepo := &mockJobRepo{}
+		service := NewService(deviceRepo, actionRepo, jobRepo)
 
 		err := service.Execute(ctx, 1, 1)
 
@@ -174,7 +202,8 @@ func TestExecute(t *testing.T) {
 	t.Run("device unreachable", func(t *testing.T) {
 		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: "127.0.0.1:99999", Actions: "[1]"}}
 		actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: "toggle", Params: `{}`}}
-		service := NewService(deviceRepo, actionRepo)
+		jobRepo := &mockJobRepo{}
+		service := NewService(deviceRepo, actionRepo, jobRepo)
 
 		err := service.Execute(ctx, 1, 1)
 
@@ -190,7 +219,8 @@ func TestExecute(t *testing.T) {
 		ip := server.Listener.Addr().String()
 		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: ip, Actions: "[1]"}}
 		actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: "toggle", Params: "invalid json"}}
-		service := NewService(deviceRepo, actionRepo)
+		jobRepo := &mockJobRepo{}
+		service := NewService(deviceRepo, actionRepo, jobRepo)
 
 		err := service.Execute(ctx, 1, 1)
 
@@ -200,7 +230,8 @@ func TestExecute(t *testing.T) {
 	t.Run("public IP rejected", func(t *testing.T) {
 		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: "8.8.8.8:80", Actions: "[1]"}}
 		actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: "toggle", Params: `{}`}}
-		service := NewService(deviceRepo, actionRepo)
+		jobRepo := &mockJobRepo{}
+		service := NewService(deviceRepo, actionRepo, jobRepo)
 
 		err := service.Execute(ctx, 1, 1)
 

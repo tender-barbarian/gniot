@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tender-barbarian/gniot/repository/models"
 	server "github.com/tender-barbarian/gniot/server"
+	"github.com/tender-barbarian/gniot/service"
 )
 
 const baseURL = "http://127.0.0.1:8080"
@@ -89,7 +90,7 @@ func TestDevicesRoutes_E2E(t *testing.T) {
 			t.Fatalf("failed to decode response: %v", err)
 		}
 		createdID = result["id"]
-		assert.Greater(t, createdID, 0)
+		assert.Equal(t, 1, createdID)
 	})
 
 	t.Run("GET /devices/{id} returns device", func(t *testing.T) {
@@ -194,7 +195,7 @@ func TestActionsRoutes_E2E(t *testing.T) {
 			t.Fatalf("failed to decode response: %v", err)
 		}
 		createdID = result["id"]
-		assert.Greater(t, createdID, 0)
+		assert.Equal(t, 1, createdID)
 	})
 
 	t.Run("GET /actions/{id} returns action", func(t *testing.T) {
@@ -329,5 +330,109 @@ func TestExecuteRoute_E2E(t *testing.T) {
 
 		// Device is unreachable (127.0.0.1:9999), so should return 500
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	})
+}
+
+func getResource[T any](t *testing.T, path string) T {
+	t.Helper()
+	resp, err := http.Get(baseURL + path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close() // nolint
+
+	var result T
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func TestJobsRoutes_E2E(t *testing.T) {
+	var createdID int
+
+	t.Run("POST /jobs creates job", func(t *testing.T) {
+		futureTime := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
+		body := fmt.Sprintf(`{"name":"test-job","devices":"[1]","action":"1","run_at":"%s","interval":"1h"}`, futureTime)
+		resp, err := http.Post(baseURL+"/jobs", "application/json", bytes.NewBufferString(body))
+		if err != nil {
+			checkServerError(t, err)
+		}
+		defer resp.Body.Close() // nolint
+
+		require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+		var result map[string]int
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		createdID = result["id"]
+		assert.Equal(t, 1, createdID)
+	})
+
+	t.Run("GET /jobs/{id} returns job", func(t *testing.T) {
+		resp, err := http.Get(fmt.Sprintf("%s/jobs/%d", baseURL, createdID))
+		if err != nil {
+			checkServerError(t, err)
+		}
+		defer resp.Body.Close() // nolint
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var job models.Job
+		if err := json.NewDecoder(resp.Body).Decode(&job); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		assert.Equal(t, "test-job", job.Name)
+		assert.Equal(t, "1h", job.Interval)
+	})
+
+	t.Run("DELETE /jobs/{id} removes job", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/jobs/%d", baseURL, createdID), nil)
+		if err != nil {
+			t.Fatalf("failed to create request: %v", err)
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			checkServerError(t, err)
+		}
+		defer resp.Body.Close() // nolint
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+}
+
+func TestJobRunner_E2E(t *testing.T) {
+	// Start mock device server
+	mockDevice := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req service.JSONRPCRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		if err != nil {
+			t.Fatal(err)
+			return
+		}
+
+		assert.Equal(t, "toggle", req.Method)
+		assert.Equal(t, map[string]any{}, req.Params)
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mockDevice.Close()
+
+	// Setup action and device
+	actionID := createResource(t, "/actions", `{"name":"job-action","path":"toggle","params":"{}"}`)
+	deviceID := createResource(t, "/devices", fmt.Sprintf(`{"name":"job-device","type":"sensor","chip":"esp32","board":"devkit","ip":"%s","actions":"[%d]"}`, mockDevice.Listener.Addr().String(), actionID))
+
+	// Create job with time in the past (should execute on next tick)
+	pastTime := time.Now().Add(-1 * time.Second).Format(time.RFC3339)
+	jobBody := fmt.Sprintf(`{"name":"immediate-job","devices":"[%d]","action":"%d","run_at":"%s","interval":"1h"}`, deviceID, actionID, pastTime)
+	jobID := createResource(t, "/jobs", jobBody)
+
+	t.Run("job is executed", func(t *testing.T) {
+		time.Sleep(10 * time.Second)
+		job := getResource[models.Job](t, fmt.Sprintf("/jobs/%d", jobID))
+		updatedTime, _ := time.Parse(time.RFC3339, job.RunAt)
+		assert.True(t, updatedTime.After(time.Now().Add(59*time.Minute))) // Should be ~1h from now
 	})
 }

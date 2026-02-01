@@ -5,14 +5,14 @@ import (
 	gocrud "github.com/tender-barbarian/go-crud"
 )
 
-type Handlers[M, N gocrud.Model] struct {
+type Handlers[M, N, O gocrud.Model] struct {
 	errorHandler *ErrorHandler
-	service *service.Service[M, N]
+	service      *service.Service[M, N, O]
 }
 
-func NewCustomHandlers[M, N gocrud.Model](errorHandler *ErrorHandler, service *service.Service[M, N]) *Handlers[M, N] {
-	return &Handlers[M, N]{
+func NewCustomHandlers[M, N, O gocrud.Model](errorHandler *ErrorHandler, service *service.Service[M, N, O]) *Handlers[M, N, O] {
+	return &Handlers[M, N, O]{
 		errorHandler: errorHandler,
-		service: service,
+		service:      service,
 	}
 }
