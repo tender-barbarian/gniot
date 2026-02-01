@@ -1,0 +1,13 @@
+services:
+  gniot:
+    container_name: gniot
+    build: .
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    environment:
+      DB_PATH: /data/gniot.db
+      MIGRATIONS_PATH: file:///app/db/migrations
+    volumes:
+      - ./data:/data
+    command: ["./gniot"]
