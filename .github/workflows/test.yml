@@ -1,0 +1,47 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.25.3
+          check-latest: true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run unit tests
+        run: go test -v -race $(go list ./... | grep -v /tests)
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.25.3
+          check-latest: true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run integration tests
+        env:
+          DB_PATH: ":memory:"
+          MIGRATIONS_PATH: file://${{ github.workspace }}/db/migrations
+        run: go test -v -race ./tests/...
