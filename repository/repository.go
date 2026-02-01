@@ -1,6 +1,7 @@
-package env
+package repository
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -8,7 +9,17 @@ import (
 	"github.com/golang-migrate/migrate/v4/database/sqlite3"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/mattn/go-sqlite3"
+	gocrud "github.com/tender-barbarian/go-crud"
 )
+
+type GenericRepo[M gocrud.Model] interface {
+	Create(ctx context.Context, model M) (int, error)
+	Get(ctx context.Context, id int) (M, error)
+	GetAll(ctx context.Context) ([]M, error)
+	Delete(ctx context.Context, id int) error
+	Update(ctx context.Context, model M, id int) error
+	GetTable() string
+}
 
 func NewDBConnection(dbPath, migrationsPath string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", dbPath)

@@ -1,22 +1,18 @@
 package handlers
 
 import (
-	"log/slog"
-	"net/http"
+	"github.com/tender-barbarian/gniot/service"
+	gocrud "github.com/tender-barbarian/go-crud"
 )
 
-
-type Handlers struct {
-	logger   *slog.Logger
+type Handlers[M, N gocrud.Model] struct {
+	errorHandler *ErrorHandler
+	service *service.Service[M, N]
 }
 
-func NewHandlers(logger *slog.Logger) *Handlers {
-	return &Handlers {
-		logger:   logger,
+func NewCustomHandlers[M, N gocrud.Model](errorHandler *ErrorHandler, service *service.Service[M, N]) *Handlers[M, N] {
+	return &Handlers[M, N]{
+		errorHandler: errorHandler,
+		service: service,
 	}
-}
-
-func (h *Handlers) WriteError(w http.ResponseWriter, r *http.Request, err error, msg string, statusCode int) {
-	h.logger.Error(err.Error(), "method", r.Method, "uri", r.URL.RequestURI())
-	http.Error(w, msg, statusCode)
 }
