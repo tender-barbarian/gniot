@@ -20,7 +20,7 @@ func RegisterGenericRoutes[M gocrud.Model](ctx context.Context, repo repository.
 	return mux
 }
 
-func RegisterCustomRoutes[M, N gocrud.Model](mux *http.ServeMux, h *handlers.Handlers[M, N]) *http.ServeMux {
+func RegisterCustomRoutes[M, N, O gocrud.Model](mux *http.ServeMux, h *handlers.Handlers[M, N, O]) *http.ServeMux {
 	mux.HandleFunc("POST /execute", h.Execute)
 	return mux
 }

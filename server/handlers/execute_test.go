@@ -15,7 +15,7 @@ import (
 
 func TestExecute(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	svc := service.NewService[*models.Device, *models.Action](nil, nil)
+	svc := service.NewService[*models.Device, *models.Action, *models.Job](nil, nil, nil)
 	errorHandler := NewErrorHandler(logger)
 	h := NewCustomHandlers(errorHandler, svc)
 	mux := http.NewServeMux()
