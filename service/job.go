@@ -11,7 +11,7 @@ import (
 	"github.com/tender-barbarian/gniot/repository/models"
 )
 
-func (s *Service[M, N, O]) RunJobs(ctx context.Context, logger *slog.Logger, interval time.Duration, errCh chan<- error) {
+func (s *Service) RunJobs(ctx context.Context, logger *slog.Logger, interval time.Duration, errCh chan<- error) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -30,7 +30,7 @@ func (s *Service[M, N, O]) RunJobs(ctx context.Context, logger *slog.Logger, int
 	}
 }
 
-func (s *Service[M, N, O]) processJobs(ctx context.Context, logger *slog.Logger) error {
+func (s *Service) processJobs(ctx context.Context, logger *slog.Logger) error {
 	jobs, err := s.jobsRepo.GetAll(ctx)
 	if err != nil {
 		return fmt.Errorf("getting jobs: %w", err)

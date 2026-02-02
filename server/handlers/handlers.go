@@ -1,18 +1,19 @@
 package handlers
 
 import (
+	"log/slog"
+
 	"github.com/tender-barbarian/gniot/service"
-	gocrud "github.com/tender-barbarian/go-crud"
 )
 
-type Handlers[M, N, O gocrud.Model] struct {
-	errorHandler *ErrorHandler
-	service      *service.Service[M, N, O]
+type CustomHandlers struct {
+	logger  *slog.Logger
+	service *service.Service
 }
 
-func NewCustomHandlers[M, N, O gocrud.Model](errorHandler *ErrorHandler, service *service.Service[M, N, O]) *Handlers[M, N, O] {
-	return &Handlers[M, N, O]{
-		errorHandler: errorHandler,
-		service:      service,
+func NewCustomHandlers(logger *slog.Logger, service *service.Service) *CustomHandlers {
+	return &CustomHandlers{
+		logger:  logger,
+		service: service,
 	}
 }

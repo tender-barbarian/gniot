@@ -2,17 +2,17 @@ package service
 
 import (
 	"github.com/tender-barbarian/gniot/repository"
-	gocrud "github.com/tender-barbarian/go-crud"
+	"github.com/tender-barbarian/gniot/repository/models"
 )
 
-type Service[M, N, O gocrud.Model] struct {
-	devicesRepo repository.GenericRepo[M]
-	actionsRepo repository.GenericRepo[N]
-	jobsRepo    repository.GenericRepo[O]
+type Service struct {
+	devicesRepo repository.GenericRepo[*models.Device]
+	actionsRepo repository.GenericRepo[*models.Action]
+	jobsRepo    repository.GenericRepo[*models.Job]
 }
 
-func NewService[M, N, O gocrud.Model](devicesRepo repository.GenericRepo[M], actionsRepo repository.GenericRepo[N], jobsRepo repository.GenericRepo[O]) *Service[M, N, O] {
-	return &Service[M, N, O]{
+func NewService(devicesRepo repository.GenericRepo[*models.Device], actionsRepo repository.GenericRepo[*models.Action], jobsRepo repository.GenericRepo[*models.Job]) *Service {
+	return &Service{
 		devicesRepo: devicesRepo,
 		actionsRepo: actionsRepo,
 		jobsRepo:    jobsRepo,
