@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -72,163 +73,226 @@ func checkServerError(t *testing.T, err error) {
 	}
 }
 
-func TestDevicesRoutes_E2E(t *testing.T) {
-	var createdID int
+func TestGenericRoutes_E2E(t *testing.T) {
+	futureTime := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
 
-	t.Run("POST /devices creates device", func(t *testing.T) {
-		body := `{"name":"esp32-sensor","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.100"}`
-		resp, err := http.Post(baseURL+"/devices", "application/json", bytes.NewBufferString(body))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
+	resources := []struct {
+		name           string
+		path           string
+		createBody     string
+		updateBody     string
+		validateGet    func(t *testing.T, body []byte)
+		validateUpdate func(t *testing.T, body []byte)
+	}{
+		{
+			name:       "devices",
+			path:       "/devices",
+			createBody: `{"name":"esp32-sensor","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.100"}`,
+			updateBody: `{"name":"esp32-updated","type":"actuator","chip":"esp32","board":"devkit","ip":"192.168.1.101"}`,
+			validateGet: func(t *testing.T, body []byte) {
+				var device models.Device
+				require.NoError(t, json.Unmarshal(body, &device))
+				assert.Equal(t, "esp32-sensor", device.Name)
+				assert.Equal(t, "192.168.1.100", device.IP)
+			},
+			validateUpdate: func(t *testing.T, body []byte) {
+				var device models.Device
+				require.NoError(t, json.Unmarshal(body, &device))
+				assert.Equal(t, "esp32-updated", device.Name)
+				assert.Equal(t, "192.168.1.101", device.IP)
+			},
+		},
+		{
+			name:       "actions",
+			path:       "/actions",
+			createBody: `{"name":"toggle-led","path":"/api/led/toggle","params":"{\"brightness\":100}"}`,
+			validateGet: func(t *testing.T, body []byte) {
+				var action models.Action
+				require.NoError(t, json.Unmarshal(body, &action))
+				assert.Equal(t, "toggle-led", action.Name)
+				assert.Equal(t, "/api/led/toggle", action.Path)
+			},
+			validateUpdate: func(t *testing.T, body []byte) {
+				var action models.Action
+				require.NoError(t, json.Unmarshal(body, &action))
+				assert.Equal(t, "toggle-led-updated", action.Name)
+				assert.Equal(t, "/api/led/toggle/updated", action.Path)
+			},
+		},
+		{
+			name:       "jobs",
+			path:       "/jobs",
+			createBody: fmt.Sprintf(`{"name":"test-job","devices":"[1]","action":"1","run_at":"%s","interval":"1h"}`, futureTime),
+			validateGet: func(t *testing.T, body []byte) {
+				var job models.Job
+				require.NoError(t, json.Unmarshal(body, &job))
+				assert.Equal(t, "test-job", job.Name)
+				assert.Equal(t, "1h", job.Interval)
+			},
+			validateUpdate: func(t *testing.T, body []byte) {
+				var job models.Job
+				require.NoError(t, json.Unmarshal(body, &job))
+				assert.Equal(t, "test-job-updated", job.Name)
+				assert.Equal(t, "2h", job.Interval)
+			},
+		},
+	}
 
-		require.Equal(t, http.StatusCreated, resp.StatusCode)
+	for _, res := range resources {
+		t.Run(res.name, func(t *testing.T) {
+			var createdID int
 
-		var result map[string]int
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		createdID = result["id"]
-		assert.Equal(t, 1, createdID)
-	})
+			t.Run("POST creates resource", func(t *testing.T) {
+				resp, err := http.Post(baseURL+res.path, "application/json", bytes.NewBufferString(res.createBody))
+				if err != nil {
+					checkServerError(t, err)
+				}
+				defer resp.Body.Close() // nolint
 
-	t.Run("GET /devices/{id} returns device", func(t *testing.T) {
-		resp, err := http.Get(fmt.Sprintf("%s/devices/%d", baseURL, createdID))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
+				require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+				var result map[string]int
+				require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+				createdID = result["id"]
+				assert.Greater(t, createdID, 0)
+			})
 
-		var device models.Device
-		if err := json.NewDecoder(resp.Body).Decode(&device); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		assert.Equal(t, createdID, device.ID)
-		assert.Equal(t, "esp32-sensor", device.Name)
-		assert.Equal(t, "192.168.1.100", device.IP)
-	})
+			t.Run("GET returns resource", func(t *testing.T) {
+				resp, err := http.Get(fmt.Sprintf("%s%s/%d", baseURL, res.path, createdID))
+				if err != nil {
+					checkServerError(t, err)
+				}
+				defer resp.Body.Close() // nolint
 
-	t.Run("GET /devices returns list with device", func(t *testing.T) {
-		resp, err := http.Get(baseURL + "/devices")
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
+				require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+				body, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+				res.validateGet(t, body)
+			})
 
-		var devices []models.Device
-		if err := json.NewDecoder(resp.Body).Decode(&devices); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		assert.GreaterOrEqual(t, len(devices), 1)
-	})
+			t.Run("GET returns list", func(t *testing.T) {
+				resp, err := http.Get(baseURL + res.path)
+				if err != nil {
+					checkServerError(t, err)
+				}
+				defer resp.Body.Close() // nolint
 
-	t.Run("POST /devices/{id} updates device", func(t *testing.T) {
-		body := `{"name":"esp32-updated","type":"actuator","chip":"esp32","board":"devkit","ip":"192.168.1.101"}`
-		resp, err := http.Post(fmt.Sprintf("%s/devices/%d", baseURL, createdID), "application/json", bytes.NewBufferString(body))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
+				require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+				var items []json.RawMessage
+				require.NoError(t, json.NewDecoder(resp.Body).Decode(&items))
+				assert.GreaterOrEqual(t, len(items), 1)
+			})
 
-		// Verify update
-		resp, err = http.Get(fmt.Sprintf("%s/devices/%d", baseURL, createdID))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
+			if res.updateBody != "" {
+				t.Run("POST updates resource", func(t *testing.T) {
+					resp, err := http.Post(fmt.Sprintf("%s%s/%d", baseURL, res.path, createdID), "application/json", bytes.NewBufferString(res.updateBody))
+					if err != nil {
+						checkServerError(t, err)
+					}
+					defer resp.Body.Close() // nolint
 
-		var device models.Device
-		if err := json.NewDecoder(resp.Body).Decode(&device); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		assert.Equal(t, "esp32-updated", device.Name)
-		assert.Equal(t, "192.168.1.101", device.IP)
-	})
+					require.Equal(t, http.StatusOK, resp.StatusCode)
+				})
 
-	t.Run("DELETE /devices/{id} removes device", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/devices/%d", baseURL, createdID), nil)
-		if err != nil {
-			t.Fatalf("failed to create request: %v", err)
-		}
+				t.Run("GET returns updated resource", func(t *testing.T) {
+					resp, err := http.Get(fmt.Sprintf("%s%s/%d", baseURL, res.path, createdID))
+					if err != nil {
+						checkServerError(t, err)
+					}
+					defer resp.Body.Close() // nolint
 
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
+					require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+					body, err := io.ReadAll(resp.Body)
+					require.NoError(t, err)
+					res.validateUpdate(t, body)
+				})
+			}
 
-		// Verify deletion
-		resp, err = http.Get(fmt.Sprintf("%s/devices/%d", baseURL, createdID))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
+			t.Run("DELETE removes resource", func(t *testing.T) {
+				req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s%s/%d", baseURL, res.path, createdID), nil)
+				require.NoError(t, err)
 
-		require.Equal(t, http.StatusNotFound, resp.StatusCode)
-	})
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					checkServerError(t, err)
+				}
+				defer resp.Body.Close() // nolint
+
+				require.Equal(t, http.StatusOK, resp.StatusCode)
+			})
+
+			t.Run("GET returns 404 after deletion", func(t *testing.T) {
+				resp, err := http.Get(fmt.Sprintf("%s%s/%d", baseURL, res.path, createdID))
+				if err != nil {
+					checkServerError(t, err)
+				}
+				defer resp.Body.Close() // nolint
+
+				require.Equal(t, http.StatusNotFound, resp.StatusCode)
+			})
+		})
+	}
 }
 
-func TestActionsRoutes_E2E(t *testing.T) {
-	var createdID int
+func TestExecuteRoute_E2E(t *testing.T) {
+	// Start mock device server for success test
+	mockDevice := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mockDevice.Close()
 
-	t.Run("POST /actions creates action", func(t *testing.T) {
-		body := `{"name":"toggle-led","path":"/api/led/toggle","params":"brightness=100"}`
-		resp, err := http.Post(baseURL+"/actions", "application/json", bytes.NewBufferString(body))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
+	// Setup
+	actionID := createResource(t, "/actions", `{"name":"test-action","path":"toggle","params":"{}"}`)
+	deviceID := createResource(t, "/devices", fmt.Sprintf(`{"name":"mock-device","type":"sensor","chip":"esp32","board":"devkit","ip":"%s","actions":"[%d]"}`, mockDevice.Listener.Addr().String(), actionID))
+	unreachableDeviceID := createResource(t, "/devices", fmt.Sprintf(`{"name":"mock-unreachable-device","type":"sensor","chip":"esp32","board":"devkit","ip":"127.0.0.1:9999","actions":"[%d]"}`, actionID))
+	otherActionID := createResource(t, "/actions", `{"name":"other-action","path":"other","params":"{}"}`)
 
-		require.Equal(t, http.StatusCreated, resp.StatusCode)
+	tests := []struct {
+		name     string
+		body     string
+		wantCode int
+	}{
+		{
+			name:     "missing params returns 400",
+			body:     `{}`,
+			wantCode: http.StatusBadRequest,
+		},
+		{
+			name:     "non-existent device returns 500",
+			body:     `{"deviceId": 99999, "actionId": 1}`,
+			wantCode: http.StatusInternalServerError,
+		},
+		{
+			name:     "action not belonging to device returns 500",
+			body:     fmt.Sprintf(`{"deviceId": %d, "actionId": %d}`, deviceID, otherActionID),
+			wantCode: http.StatusInternalServerError,
+		},
+		{
+			name:     "successful execution",
+			body:     fmt.Sprintf(`{"deviceId": %d, "actionId": %d}`, deviceID, actionID),
+			wantCode: http.StatusOK,
+		},
+		{
+			name:     "unreachable device returns 500",
+			body:     fmt.Sprintf(`{"deviceId": %d, "actionId": %d}`, unreachableDeviceID, actionID),
+			wantCode: http.StatusInternalServerError,
+		},
+	}
 
-		var result map[string]int
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		createdID = result["id"]
-		assert.Equal(t, 1, createdID)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := http.Post(baseURL+"/execute", "application/json", bytes.NewBufferString(tt.body))
+			if err != nil {
+				checkServerError(t, err)
+			}
+			defer resp.Body.Close() // nolint
 
-	t.Run("GET /actions/{id} returns action", func(t *testing.T) {
-		resp, err := http.Get(fmt.Sprintf("%s/actions/%d", baseURL, createdID))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
-
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-
-		var action models.Action
-		if err := json.NewDecoder(resp.Body).Decode(&action); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		assert.Equal(t, "toggle-led", action.Name)
-		assert.Equal(t, "/api/led/toggle", action.Path)
-	})
-
-	t.Run("DELETE /actions/{id} removes action", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/actions/%d", baseURL, createdID), nil)
-		if err != nil {
-			t.Fatalf("failed to create request: %v", err)
-		}
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
-
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-	})
+			assert.Equal(t, tt.wantCode, resp.StatusCode)
+		})
+	}
 }
 
 func createResource(t *testing.T, path, body string) int {
@@ -248,159 +312,6 @@ func createResource(t *testing.T, path, body string) int {
 		t.Fatal(err)
 	}
 	return result["id"]
-}
-
-func TestExecuteRoute_E2E(t *testing.T) {
-	// Start mock device server for success test
-	mockDevice := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer mockDevice.Close()
-
-	// Setup
-	actionID := createResource(t, "/actions", `{"name":"test-action","path":"toggle","params":"{}"}`)
-	deviceID := createResource(t, "/devices", fmt.Sprintf(`{"name":"mock-device","type":"sensor","chip":"esp32","board":"devkit","ip":"%s","actions":"[%d]"}`, mockDevice.Listener.Addr().String(), actionID))
-	unreachableDeviceID := createResource(t, "/devices", fmt.Sprintf(`{"name":"mock-unreachable-device","type":"sensor","chip":"esp32","board":"devkit","ip":"127.0.0.1:9999","actions":"[%d]"}`, actionID))
-
-	t.Run("POST /execute with missing params returns 400", func(t *testing.T) {
-		resp, err := http.Post(baseURL+"/execute", "application/json", bytes.NewBufferString(`{}`))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	})
-
-	t.Run("POST /execute with non-existent device returns 500", func(t *testing.T) {
-		body := `{"deviceId": 99999, "actionId": 1}`
-		resp, err := http.Post(baseURL+"/execute", "application/json", bytes.NewBufferString(body))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
-
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-	})
-
-	t.Run("POST /execute with action not belonging to device returns 500", func(t *testing.T) {
-		// Create another action not assigned to device
-		body := `{"name":"other-action","path":"other","params":"{}"}`
-		resp, err := http.Post(baseURL+"/actions", "application/json", bytes.NewBufferString(body))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
-
-		var result map[string]int
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		otherActionID := result["id"]
-
-		// Try to execute with action not assigned to device
-		body = fmt.Sprintf(`{"deviceId": %d, "actionId": %d}`, deviceID, otherActionID)
-		resp, err = http.Post(baseURL+"/execute", "application/json", bytes.NewBufferString(body))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
-
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-	})
-
-	t.Run("POST /execute succeeds", func(t *testing.T) {
-		body := fmt.Sprintf(`{"deviceId": %d, "actionId": %d}`, deviceID, actionID)
-		resp, err := http.Post(baseURL+"/execute", "application/json", bytes.NewBufferString(body))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	})
-
-	t.Run("POST /execute with unreachable device returns 500", func(t *testing.T) {
-		body := fmt.Sprintf(`{"deviceId": %d, "actionId": %d}`, unreachableDeviceID, actionID)
-		resp, err := http.Post(baseURL+"/execute", "application/json", bytes.NewBufferString(body))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
-
-		// Device is unreachable (127.0.0.1:9999), so should return 500
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-	})
-}
-
-func getResource[T any](t *testing.T, path string) T {
-	t.Helper()
-	resp, err := http.Get(baseURL + path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close() // nolint
-
-	var result T
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatal(err)
-	}
-	return result
-}
-
-func TestJobsRoutes_E2E(t *testing.T) {
-	var createdID int
-
-	t.Run("POST /jobs creates job", func(t *testing.T) {
-		futureTime := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
-		body := fmt.Sprintf(`{"name":"test-job","devices":"[1]","action":"1","run_at":"%s","interval":"1h"}`, futureTime)
-		resp, err := http.Post(baseURL+"/jobs", "application/json", bytes.NewBufferString(body))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
-
-		require.Equal(t, http.StatusCreated, resp.StatusCode)
-
-		var result map[string]int
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		createdID = result["id"]
-		assert.Equal(t, 1, createdID)
-	})
-
-	t.Run("GET /jobs/{id} returns job", func(t *testing.T) {
-		resp, err := http.Get(fmt.Sprintf("%s/jobs/%d", baseURL, createdID))
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
-
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-
-		var job models.Job
-		if err := json.NewDecoder(resp.Body).Decode(&job); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-		assert.Equal(t, "test-job", job.Name)
-		assert.Equal(t, "1h", job.Interval)
-	})
-
-	t.Run("DELETE /jobs/{id} removes job", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/jobs/%d", baseURL, createdID), nil)
-		if err != nil {
-			t.Fatalf("failed to create request: %v", err)
-		}
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
-
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-	})
 }
 
 func TestJobRunner_E2E(t *testing.T) {
@@ -435,4 +346,19 @@ func TestJobRunner_E2E(t *testing.T) {
 		updatedTime, _ := time.Parse(time.RFC3339, job.RunAt)
 		assert.True(t, updatedTime.After(time.Now().Add(59*time.Minute))) // Should be ~1h from now
 	})
+}
+
+func getResource[T any](t *testing.T, path string) T {
+	t.Helper()
+	resp, err := http.Get(baseURL + path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close() // nolint
+
+	var result T
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	return result
 }
