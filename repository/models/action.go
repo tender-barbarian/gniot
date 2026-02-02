@@ -1,6 +1,10 @@
 package models
 
-import gocrud "github.com/tender-barbarian/go-crud"
+import (
+	"encoding/json"
+
+	gocrud "github.com/tender-barbarian/go-crud"
+)
 
 type Action struct {
 	ID     int    `json:"id" db:"id"`
@@ -8,4 +12,14 @@ type Action struct {
 	Path   string `json:"path" db:"path"`
 	Params string `json:"params" db:"params"`
 	gocrud.Reflection
+}
+
+func (a *Action) Validate() error {
+	if a.Params != "" {
+		if !json.Valid([]byte(a.Params)) {
+			return ValidationError{msg: "params must be valid JSON"}
+		}
+	}
+
+	return nil
 }

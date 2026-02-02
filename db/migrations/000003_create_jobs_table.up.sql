@@ -3,6 +3,6 @@ CREATE TABLE IF NOT EXISTS jobs (
     name TEXT NOT NULL,
     devices TEXT,
     action TEXT,
-    runat TEXT,
+    run_at TEXT,
     interval TEXT
 );
