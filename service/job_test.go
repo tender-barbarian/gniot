@@ -116,9 +116,9 @@ func TestProcessJobs(t *testing.T) {
 					},
 				}
 
-				svc := NewService(deviceRepo, actionRepo, jobRepo)
+				svc := NewService(deviceRepo, actionRepo, jobRepo, logger)
 
-				err := svc.processJobs(ctx, logger)
+				err := svc.processJobs(ctx)
 				if tt.wantErr == "" {
 					assert.NoError(t, err)
 				} else {
@@ -145,12 +145,12 @@ func TestRunJobs(t *testing.T) {
 		jobRepo := &mockJobRepo{jobs: []*models.Job{}}
 		deviceRepo := &mockDeviceRepo{}
 		actionRepo := &mockActionRepo{}
-		svc := NewService(deviceRepo, actionRepo, jobRepo)
+		svc := NewService(deviceRepo, actionRepo, jobRepo, logger)
 		errCh := make(chan error, 10)
 
 		done := make(chan struct{})
 		go func() {
-			svc.RunJobs(ctx, logger, 10*time.Millisecond, errCh)
+			svc.RunJobs(ctx, 10*time.Millisecond, errCh)
 			close(done)
 		}()
 
@@ -170,10 +170,10 @@ func TestRunJobs(t *testing.T) {
 		jobRepo := &mockJobRepo{err: errors.New("db error")}
 		deviceRepo := &mockDeviceRepo{}
 		actionRepo := &mockActionRepo{}
-		svc := NewService(deviceRepo, actionRepo, jobRepo)
+		svc := NewService(deviceRepo, actionRepo, jobRepo, logger)
 		errCh := make(chan error, 10)
 
-		go svc.RunJobs(ctx, logger, 10*time.Millisecond, errCh)
+		go svc.RunJobs(ctx, 10*time.Millisecond, errCh)
 
 		select {
 		case err := <-errCh:
