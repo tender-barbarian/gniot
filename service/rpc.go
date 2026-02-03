@@ -17,7 +17,7 @@ type JSONRPCRequest struct {
 	ID      int    `json:"id"`
 }
 
-func (s *Service[M, N, O]) callJSONRPC(ctx context.Context, ip, method, params string) error {
+func (s *Service) callJSONRPC(ctx context.Context, ip, method, params string) error {
 	var paramsObj interface{}
 	if params != "" {
 		if err := json.Unmarshal([]byte(params), &paramsObj); err != nil {

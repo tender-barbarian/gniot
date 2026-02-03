@@ -11,7 +11,7 @@ import (
 	"github.com/tender-barbarian/gniot/repository/models"
 )
 
-func (s *Service[M, N, O]) Execute(ctx context.Context, deviceId, actionId int) error {
+func (s *Service) Execute(ctx context.Context, deviceId, actionId int) error {
 	d, err := s.devicesRepo.Get(ctx, deviceId)
 	if err != nil {
 		return fmt.Errorf("getting device: %w", err)

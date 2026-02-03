@@ -1,6 +1,10 @@
 package models
 
-import gocrud "github.com/tender-barbarian/go-crud"
+import (
+	"encoding/json"
+
+	gocrud "github.com/tender-barbarian/go-crud"
+)
 
 type Device struct {
 	ID      int    `json:"id" db:"id"`
@@ -13,3 +17,13 @@ type Device struct {
 	gocrud.Reflection
 }
 
+func (d *Device) Validate() error {
+	if d.Actions != "" {
+		var actions []int
+		if err := json.Unmarshal([]byte(d.Actions), &actions); err != nil {
+			return ValidationError{msg: "actions must be a list of action IDs"}
+		}
+	}
+
+	return nil
+}

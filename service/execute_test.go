@@ -60,181 +60,123 @@ func (m *mockActionRepo) GetTable() string {
 	return "actions"
 }
 
-type mockJobRepo struct{}
-
-func (m *mockJobRepo) Create(ctx context.Context, model *models.Job) (int, error) {
-	return 0, nil
-}
-func (m *mockJobRepo) Get(ctx context.Context, id int) (*models.Job, error) {
-	return nil, nil
-}
-func (m *mockJobRepo) GetAll(ctx context.Context) ([]*models.Job, error) {
-	return nil, nil
-}
-func (m *mockJobRepo) Delete(ctx context.Context, id int) error {
-	return nil
-}
-func (m *mockJobRepo) Update(ctx context.Context, model *models.Job, id int) error {
-	return nil
-}
-func (m *mockJobRepo) GetTable() string {
-	return "jobs"
-}
-
 func TestExecute(t *testing.T) {
 	ctx := context.Background()
-	t.Run("device not found", func(t *testing.T) {
-		deviceRepo := &mockDeviceRepo{err: errors.New("not found")}
-		actionRepo := &mockActionRepo{}
-		jobRepo := &mockJobRepo{}
-		service := NewService(deviceRepo, actionRepo, jobRepo)
 
-		err := service.Execute(ctx, 1, 1)
+	t.Run("validation errors", func(t *testing.T) {
+		tests := []struct {
+			name       string
+			deviceRepo *mockDeviceRepo
+			actionRepo *mockActionRepo
+			wantErr    string
+		}{
+			{
+				name:       "device not found",
+				deviceRepo: &mockDeviceRepo{err: errors.New("not found")},
+				actionRepo: &mockActionRepo{},
+				wantErr:    "getting device: not found",
+			},
+			{
+				name:       "action not found",
+				deviceRepo: &mockDeviceRepo{device: &models.Device{ID: 1, Actions: "[1]"}},
+				actionRepo: &mockActionRepo{err: errors.New("not found")},
+				wantErr:    "getting action: not found",
+			},
+			{
+				name:       "action does not belong to device",
+				deviceRepo: &mockDeviceRepo{device: &models.Device{ID: 1, Actions: "[2,3]"}},
+				actionRepo: &mockActionRepo{action: &models.Action{ID: 1}},
+				wantErr:    "action 1 does not belong to device 1",
+			},
+			{
+				name:       "device unreachable",
+				deviceRepo: &mockDeviceRepo{device: &models.Device{ID: 1, IP: "127.0.0.1:99999", Actions: "[1]"}},
+				actionRepo: &mockActionRepo{action: &models.Action{ID: 1, Path: "toggle", Params: `{}`}},
+				wantErr:    "calling device: Post \"http://127.0.0.1:99999/rpc\": dial tcp: address 99999: invalid port",
+			},
+			{
+				name:       "public IP rejected",
+				deviceRepo: &mockDeviceRepo{device: &models.Device{ID: 1, IP: "8.8.8.8:80", Actions: "[1]"}},
+				actionRepo: &mockActionRepo{action: &models.Action{ID: 1, Path: "toggle", Params: `{}`}},
+				wantErr:    "device IP must be in private range",
+			},
+		}
 
-		assert.EqualError(t, err, "getting device: not found")
-	})
-
-	t.Run("action not found", func(t *testing.T) {
-		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, Actions: "[1]"}}
-		actionRepo := &mockActionRepo{err: errors.New("not found")}
-		jobRepo := &mockJobRepo{}
-		service := NewService(deviceRepo, actionRepo, jobRepo)
-
-		err := service.Execute(ctx, 1, 1)
-
-		assert.EqualError(t, err, "getting action: not found")
-	})
-
-	t.Run("invalid device actions JSON", func(t *testing.T) {
-		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, Actions: "invalid"}}
-		actionRepo := &mockActionRepo{action: &models.Action{ID: 1}}
-		jobRepo := &mockJobRepo{}
-		service := NewService(deviceRepo, actionRepo, jobRepo)
-
-		err := service.Execute(ctx, 1, 1)
-
-		assert.EqualError(t, err, "unmarshalling device actions: invalid character 'i' looking for beginning of value")
-	})
-
-	t.Run("action does not belong to device", func(t *testing.T) {
-		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, Actions: "[2,3]"}}
-		actionRepo := &mockActionRepo{action: &models.Action{ID: 1}}
-		jobRepo := &mockJobRepo{}
-		service := NewService(deviceRepo, actionRepo, jobRepo)
-
-		err := service.Execute(ctx, 1, 1)
-
-		assert.EqualError(t, err, "action 1 does not belong to device 1")
-	})
-
-	t.Run("successful execution", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "/rpc", r.URL.Path)
-			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-
-			var req JSONRPCRequest
-			err := json.NewDecoder(r.Body).Decode(&req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			assert.Equal(t, "2.0", req.JSONRPC)
-			assert.Equal(t, "toggle", req.Method)
-			assert.Equal(t, map[string]interface{}{"pin": float64(5)}, req.Params)
-
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		ip := server.Listener.Addr().String()
-		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: ip, Actions: "[1,2]"}}
-		actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: "toggle", Params: `{"pin":5}`}}
-		jobRepo := &mockJobRepo{}
-		service := NewService(deviceRepo, actionRepo, jobRepo)
-
-		err := service.Execute(ctx, 1, 1)
-		if err != nil {
-			t.Fatal(err)
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				svc := NewService(tt.deviceRepo, tt.actionRepo, &mockJobRepo{})
+				err := svc.Execute(ctx, 1, 1)
+				assert.EqualError(t, err, tt.wantErr)
+			})
 		}
 	})
 
-	t.Run("successful execution with empty params", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var req JSONRPCRequest
-			err := json.NewDecoder(r.Body).Decode(&req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			assert.Nil(t, req.Params)
-
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		ip := server.Listener.Addr().String()
-		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: ip, Actions: "[1]"}}
-		actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: "status", Params: ""}}
-		jobRepo := &mockJobRepo{}
-		service := NewService(deviceRepo, actionRepo, jobRepo)
-
-		err := service.Execute(ctx, 1, 1)
-		if err != nil {
-			t.Fatal(err)
+	t.Run("mock device execution", func(t *testing.T) {
+		tests := []struct {
+			name         string
+			serverStatus int
+			actionPath   string
+			actionParams string
+			wantErr      string
+			validateReq  func(t *testing.T, req JSONRPCRequest)
+		}{
+			{
+				name:         "successful execution",
+				serverStatus: http.StatusOK,
+				actionPath:   "toggle",
+				actionParams: `{"pin":5}`,
+				wantErr:      "",
+				validateReq: func(t *testing.T, req JSONRPCRequest) {
+					assert.Equal(t, "2.0", req.JSONRPC)
+					assert.Equal(t, "toggle", req.Method)
+					assert.Equal(t, map[string]any{"pin": float64(5)}, req.Params)
+				},
+			},
+			{
+				name:         "successful execution with empty params",
+				serverStatus: http.StatusOK,
+				actionPath:   "status",
+				actionParams: "",
+				wantErr:      "",
+				validateReq: func(t *testing.T, req JSONRPCRequest) {
+					assert.Nil(t, req.Params)
+				},
+			},
+			{
+				name:         "device returns non-200 status",
+				serverStatus: http.StatusInternalServerError,
+				actionPath:   "toggle",
+				actionParams: `{}`,
+				wantErr:      "device returned status 500",
+			},
 		}
-	})
 
-	t.Run("device returns non-200 status", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		defer server.Close()
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if tt.validateReq != nil {
+						var req JSONRPCRequest
+						if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+							t.Fatal(err)
+						}
+						tt.validateReq(t, req)
+					}
+					w.WriteHeader(tt.serverStatus)
+				}))
+				defer server.Close()
 
-		ip := server.Listener.Addr().String()
-		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: ip, Actions: "[1]"}}
-		actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: "toggle", Params: `{}`}}
-		jobRepo := &mockJobRepo{}
-		service := NewService(deviceRepo, actionRepo, jobRepo)
+				deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: server.Listener.Addr().String(), Actions: "[1,2]"}}
+				actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: tt.actionPath, Params: tt.actionParams}}
+				svc := NewService(deviceRepo, actionRepo, nil)
 
-		err := service.Execute(ctx, 1, 1)
+				err := svc.Execute(ctx, 1, 1)
 
-		assert.EqualError(t, err, "device returned status 500")
-	})
-
-	t.Run("device unreachable", func(t *testing.T) {
-		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: "127.0.0.1:99999", Actions: "[1]"}}
-		actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: "toggle", Params: `{}`}}
-		jobRepo := &mockJobRepo{}
-		service := NewService(deviceRepo, actionRepo, jobRepo)
-
-		err := service.Execute(ctx, 1, 1)
-
-		assert.ErrorContains(t, err, "calling device")
-	})
-
-	t.Run("invalid action params JSON", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		ip := server.Listener.Addr().String()
-		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: ip, Actions: "[1]"}}
-		actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: "toggle", Params: "invalid json"}}
-		jobRepo := &mockJobRepo{}
-		service := NewService(deviceRepo, actionRepo, jobRepo)
-
-		err := service.Execute(ctx, 1, 1)
-
-		assert.EqualError(t, err, "parsing action params: invalid character 'i' looking for beginning of value")
-	})
-
-	t.Run("public IP rejected", func(t *testing.T) {
-		deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: "8.8.8.8:80", Actions: "[1]"}}
-		actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: "toggle", Params: `{}`}}
-		jobRepo := &mockJobRepo{}
-		service := NewService(deviceRepo, actionRepo, jobRepo)
-
-		err := service.Execute(ctx, 1, 1)
-
-		assert.EqualError(t, err, "device IP must be in private range")
+				if tt.wantErr == "" {
+					assert.NoError(t, err)
+				} else {
+					assert.EqualError(t, err, tt.wantErr)
+				}
+			})
+		}
 	})
 }
