@@ -7,9 +7,14 @@ import (
 	"fmt"
 	"net"
 	"slices"
+	"sync"
 )
 
 func (s *Service) Execute(ctx context.Context, deviceId, actionId int) error {
+	mu := s.getDeviceMutex(deviceId)
+	mu.Lock()
+	defer mu.Unlock()
+
 	device, err := s.devicesRepo.Get(ctx, deviceId)
 	if err != nil {
 		return fmt.Errorf("getting device: %w", err)
@@ -35,6 +40,11 @@ func (s *Service) Execute(ctx context.Context, deviceId, actionId int) error {
 	}
 
 	return s.callJSONRPC(ctx, device.IP, action.Path, action.Params)
+}
+
+func (s *Service) getDeviceMutex(deviceId int) *sync.Mutex {
+	mu, _ := s.deviceMu.LoadOrStore(deviceId, &sync.Mutex{})
+	return mu.(*sync.Mutex)
 }
 
 func isPrivateIP(ipStr string) bool {
