@@ -362,3 +362,88 @@ func getResource[T any](t *testing.T, path string) T {
 	}
 	return result
 }
+
+func TestDeviceActionValidation_E2E(t *testing.T) {
+	// Create a valid action first
+	validActionID := createResource(t, "/actions", `{"name":"valid-action","path":"test","params":"{}"}`)
+
+	tests := []struct {
+		name     string
+		body     string
+		wantCode int
+	}{
+		{
+			name:     "create device with non-existent action fails",
+			body:     `{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.50","actions":"[99999]"}`,
+			wantCode: http.StatusBadRequest,
+		},
+		{
+			name:     "create device with mixed valid and invalid actions fails",
+			body:     fmt.Sprintf(`{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.51","actions":"[%d, 99999]"}`, validActionID),
+			wantCode: http.StatusBadRequest,
+		},
+		{
+			name:     "create device with valid action succeeds",
+			body:     fmt.Sprintf(`{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.52","actions":"[%d]"}`, validActionID),
+			wantCode: http.StatusCreated,
+		},
+		{
+			name:     "create device with empty actions succeeds",
+			body:     `{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.53","actions":""}`,
+			wantCode: http.StatusCreated,
+		},
+		{
+			name:     "create device without actions field succeeds",
+			body:     `{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.54"}`,
+			wantCode: http.StatusCreated,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := http.Post(baseURL+"/devices", "application/json", bytes.NewBufferString(tt.body))
+			if err != nil {
+				checkServerError(t, err)
+			}
+			defer resp.Body.Close() // nolint
+
+			assert.Equal(t, tt.wantCode, resp.StatusCode)
+		})
+	}
+
+	t.Run("update device with non-existent action fails", func(t *testing.T) {
+		// Create a device without actions
+		deviceID := createResource(t, "/devices", `{"name":"update-test","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.60"}`)
+
+		// Try to update with non-existent action
+		resp, err := http.Post(
+			fmt.Sprintf("%s/devices/%d", baseURL, deviceID),
+			"application/json",
+			bytes.NewBufferString(`{"actions":"[99999]"}`),
+		)
+		if err != nil {
+			checkServerError(t, err)
+		}
+		defer resp.Body.Close() // nolint
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("update device with valid action succeeds", func(t *testing.T) {
+		// Create a device without actions
+		deviceID := createResource(t, "/devices", `{"name":"update-test-2","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.61"}`)
+
+		// Update with valid action
+		resp, err := http.Post(
+			fmt.Sprintf("%s/devices/%d", baseURL, deviceID),
+			"application/json",
+			bytes.NewBufferString(fmt.Sprintf(`{"actions":"[%d]"}`, validActionID)),
+		)
+		if err != nil {
+			checkServerError(t, err)
+		}
+		defer resp.Body.Close() // nolint
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+}
