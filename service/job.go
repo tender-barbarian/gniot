@@ -7,8 +7,6 @@ import (
 	"log/slog"
 	"strconv"
 	"time"
-
-	"github.com/tender-barbarian/gniot/repository/models"
 )
 
 func (s *Service) RunJobs(ctx context.Context, logger *slog.Logger, interval time.Duration, errCh chan<- error) {
@@ -38,13 +36,7 @@ func (s *Service) processJobs(ctx context.Context, logger *slog.Logger) error {
 
 	now := time.Now()
 
-	for _, j := range jobs {
-		job, ok := any(j).(*models.Job)
-		if !ok {
-			logger.Error("asserting job type")
-			continue
-		}
-
+	for _, job := range jobs {
 		jobTime, err := time.Parse(time.RFC3339, job.RunAt)
 		if err != nil {
 			logger.Error("parsing job time", "job_id", job.ID, "error", err)
@@ -83,7 +75,7 @@ func (s *Service) processJobs(ctx context.Context, logger *slog.Logger) error {
 		}
 
 		job.RunAt = now.Add(interval).Format(time.RFC3339)
-		err = s.jobsRepo.Update(ctx, j, job.ID)
+		err = s.jobsRepo.Update(ctx, job, job.ID)
 		if err != nil {
 			logger.Error("updating job time", "job_id", job.ID, "error", err)
 		} else {
