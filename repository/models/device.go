@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"encoding/json"
 
 	gocrud "github.com/tender-barbarian/go-crud"
@@ -17,11 +18,23 @@ type Device struct {
 	gocrud.Reflection
 }
 
-func (d *Device) Validate() error {
+func (d *Device) ValidateWithDB(ctx context.Context, db gocrud.DBQuerier) error {
+	var actions []int
 	if d.Actions != "" {
-		var actions []int
 		if err := json.Unmarshal([]byte(d.Actions), &actions); err != nil {
 			return ValidationError{msg: "actions must be a list of action IDs"}
+		}
+	}
+
+	for _, actionID := range actions {
+		var exists bool
+		row := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM actions WHERE ID = ?)", actionID)
+		if err := row.Scan(&exists); err != nil {
+			return ValidationError{msg: err.Error()}
+		}
+
+		if !exists {
+			return ValidationError{msg: "all actions must exist"}
 		}
 	}
 
