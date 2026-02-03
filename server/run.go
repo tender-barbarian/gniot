@@ -50,7 +50,7 @@ func Run() error {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	// Initialize service
-	service := service.NewService(devicesRepo, actionsRepo, jobsRepo)
+	service := service.NewService(devicesRepo, actionsRepo, jobsRepo, logger)
 
 	// Initialize handlers and routes
 	mux := http.NewServeMux()
@@ -85,7 +85,7 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("parsing JOBS_INTERVAL: %w", err)
 	}
-	go service.RunJobs(ctx, logger, jobsInterval, jobErrCh)
+	go service.RunJobs(ctx, jobsInterval, jobErrCh)
 
 	// Handle job errors
 	go func() {
