@@ -379,27 +379,27 @@ func TestDeviceActionValidation_E2E(t *testing.T) {
 	}{
 		{
 			name:     "create device with non-existent action fails",
-			body:     `{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.50","actions":"[99999]"}`,
+			body:     `{"name":"test-device1","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.50","actions":"[99999]"}`,
 			wantCode: http.StatusBadRequest,
 		},
 		{
 			name:     "create device with mixed valid and invalid actions fails",
-			body:     fmt.Sprintf(`{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.51","actions":"[%d, 99999]"}`, validActionID),
+			body:     fmt.Sprintf(`{"name":"test-device2","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.51","actions":"[%d, 99999]"}`, validActionID),
 			wantCode: http.StatusBadRequest,
 		},
 		{
 			name:     "create device with valid action succeeds",
-			body:     fmt.Sprintf(`{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.52","actions":"[%d]"}`, validActionID),
+			body:     fmt.Sprintf(`{"name":"test-device3","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.52","actions":"[%d]"}`, validActionID),
 			wantCode: http.StatusCreated,
 		},
 		{
 			name:     "create device with empty actions succeeds",
-			body:     `{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.53","actions":""}`,
+			body:     `{"name":"test-device4","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.53","actions":""}`,
 			wantCode: http.StatusCreated,
 		},
 		{
 			name:     "create device without actions field succeeds",
-			body:     `{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.54"}`,
+			body:     `{"name":"test-device5","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.54"}`,
 			wantCode: http.StatusCreated,
 		},
 	}

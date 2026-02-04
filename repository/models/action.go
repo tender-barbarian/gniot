@@ -8,10 +8,12 @@ import (
 )
 
 type Action struct {
-	ID     int    `json:"id" db:"id"`
-	Name   string `json:"name" db:"name"`
-	Path   string `json:"path" db:"path"`
-	Params string `json:"params" db:"params"`
+	ID        int             `json:"id" db:"id"`
+	Name      string          `json:"name" db:"name"`
+	Path      string          `json:"path" db:"path"`
+	Params    string          `json:"params" db:"params"`
+	CreatedAt gocrud.NullTime `json:"created_at" db:"created_at"`
+	UpdatedAt gocrud.NullTime `json:"updated_at" db:"updated_at"`
 	gocrud.Reflection
 }
 
