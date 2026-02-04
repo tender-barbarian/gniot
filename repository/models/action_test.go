@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -51,7 +52,7 @@ func TestAction_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.action.Validate()
+			err := tt.action.Validate(context.Background(), nil)
 
 			if tt.wantErr == "" {
 				assert.NoError(t, err)

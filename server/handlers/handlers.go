@@ -9,11 +9,13 @@ import (
 type CustomHandlers struct {
 	logger  *slog.Logger
 	service *service.Service
+	*ErrorHandler
 }
 
-func NewCustomHandlers(logger *slog.Logger, service *service.Service) *CustomHandlers {
+func NewCustomHandlers(logger *slog.Logger, service *service.Service, eh *ErrorHandler) *CustomHandlers {
 	return &CustomHandlers{
-		logger:  logger,
-		service: service,
+		logger:       logger,
+		service:      service,
+		ErrorHandler: eh,
 	}
 }

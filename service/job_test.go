@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -39,6 +40,10 @@ func (m *mockJobRepo) Update(ctx context.Context, model *models.Job, id int) err
 }
 func (m *mockJobRepo) GetTable() string {
 	return "jobs"
+}
+
+func (m *mockJobRepo) GetDB() *sql.DB {
+	return nil
 }
 
 func TestProcessJobs(t *testing.T) {

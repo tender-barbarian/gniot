@@ -55,11 +55,12 @@ func Run() error {
 	// Initialize handlers and routes
 	mux := http.NewServeMux()
 	mux.Handle("/", http.NotFoundHandler())
-	customHandlers := handlers.NewCustomHandlers(logger, service)
+	errorHandler := handlers.NewErrorHandler(logger)
+	customHandlers := handlers.NewCustomHandlers(logger, service, errorHandler)
 	mux = routes.RegisterCustomRoutes(mux, customHandlers)
-	mux = routes.RegisterGenericRoutesWithDB(ctx, mux, customHandlers, devicesRepo, db)
-	mux = routes.RegisterGenericRoutes(ctx, mux, customHandlers, actionsRepo)
-	mux = routes.RegisterGenericRoutes(ctx, mux, customHandlers, jobsRepo)
+	mux = routes.RegisterGenericRoutes(ctx, mux, errorHandler, devicesRepo)
+	mux = routes.RegisterGenericRoutes(ctx, mux, errorHandler, actionsRepo)
+	mux = routes.RegisterGenericRoutes(ctx, mux, errorHandler, jobsRepo)
 
 	// Initialize middleware
 	var wrappedMux http.Handler = mux

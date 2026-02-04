@@ -89,7 +89,7 @@ func TestDevice_ValidateWithDB(t *testing.T) {
 
 			tt.setupMock(mock)
 
-			err = tt.device.ValidateWithDB(context.Background(), db)
+			err = tt.device.Validate(context.Background(), db)
 
 			if tt.wantErr == "" {
 				assert.NoError(t, err)

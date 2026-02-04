@@ -15,7 +15,7 @@ import (
 func TestExecute(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	svc := service.NewService(nil, nil, nil, logger)
-	h := NewCustomHandlers(logger, svc)
+	h := NewCustomHandlers(logger, svc, NewErrorHandler(logger))
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /execute", h.Execute)
 

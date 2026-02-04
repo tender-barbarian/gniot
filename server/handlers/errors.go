@@ -1,8 +1,21 @@
 package handlers
 
-import "net/http"
+import (
+	"log/slog"
+	"net/http"
+)
 
-func (h *CustomHandlers) WriteError(w http.ResponseWriter, r *http.Request, err error, msg string, statusCode int) {
+type ErrorHandler struct {
+	logger *slog.Logger
+}
+
+func NewErrorHandler(logger *slog.Logger) *ErrorHandler {
+	return &ErrorHandler{
+		logger: logger,
+	}
+}
+
+func (h *ErrorHandler) WriteError(w http.ResponseWriter, r *http.Request, err error, msg string, statusCode int) {
 	if err == nil {
 		h.logger.Error(msg, "method", r.Method, "uri", r.URL.RequestURI())
 	} else {
