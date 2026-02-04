@@ -13,7 +13,7 @@ import (
 
 func TestWriteError(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewCustomHandlers(logger, nil)
+	h := NewCustomHandlers(logger, nil, NewErrorHandler(logger))
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/test", nil)

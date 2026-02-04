@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -37,6 +38,10 @@ func (m *mockDeviceRepo) GetTable() string {
 	return "devices"
 }
 
+func (m *mockDeviceRepo) GetDB() *sql.DB {
+	return nil
+}
+
 type mockActionRepo struct {
 	action *models.Action
 	err    error
@@ -59,6 +64,10 @@ func (m *mockActionRepo) Update(ctx context.Context, model *models.Action, id in
 }
 func (m *mockActionRepo) GetTable() string {
 	return "actions"
+}
+
+func (m *mockActionRepo) GetDB() *sql.DB {
+	return nil
 }
 
 func TestExecute(t *testing.T) {
