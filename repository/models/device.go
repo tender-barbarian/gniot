@@ -18,7 +18,7 @@ type Device struct {
 	gocrud.Reflection
 }
 
-func (d *Device) ValidateWithDB(ctx context.Context, db gocrud.DBQuerier) error {
+func (d *Device) Validate(ctx context.Context, db gocrud.DBQuerier) error {
 	var actions []int
 	if d.Actions != "" {
 		if err := json.Unmarshal([]byte(d.Actions), &actions); err != nil {

@@ -19,6 +19,7 @@ type GenericRepo[M gocrud.Model] interface {
 	Delete(ctx context.Context, id int) error
 	Update(ctx context.Context, model M, id int) error
 	GetTable() string
+	GetDB() *sql.DB
 }
 
 func NewDBConnection(dbPath, migrationsPath string) (*sql.DB, error) {
