@@ -52,40 +52,72 @@ func TestProcessJobs(t *testing.T) {
 
 	t.Run("test job processing", func(t *testing.T) {
 		tests := []struct {
-			name         string
-			runAt        string
-			validateReq  func(t *testing.T, req JSONRPCRequest)
-			deviceErr    error
-			jobErr       error
-			wantErr      string
-			expectUpdate bool
+			name        string
+			runAt       string
+			enabled     int
+			validateReq func(*testing.T, JSONRPCRequest)
+			deviceErr   error
+			jobErr      error
+			wantErr     string
+			expected    func(*testing.T, *mockJobRepo)
 		}{
 			{
-				name:  "job executed, runAt rescheduled",
-				runAt: time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+				name:    "job executed, runAt rescheduled",
+				runAt:   time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+				enabled: 1,
 				validateReq: func(t *testing.T, req JSONRPCRequest) {
 					assert.Equal(t, "2.0", req.JSONRPC)
 					assert.Equal(t, "toggle", req.Method)
 					assert.Equal(t, map[string]any{"pin": float64(5)}, req.Params)
 				},
-				expectUpdate: true,
+				expected: func(t *testing.T, jobRepo *mockJobRepo) {
+					assert.NotNil(t, jobRepo.updated)
+					updatedTime, _ := time.Parse(time.RFC3339, jobRepo.updated.RunAt)
+					assert.True(t, updatedTime.After(time.Now().Add(59*time.Minute)))
+
+					assert.NotEmpty(t, jobRepo.updated.LastTriggered)
+					lastTriggered, _ := time.Parse(time.RFC3339, jobRepo.updated.LastTriggered)
+					assert.True(t, lastTriggered.After(time.Now().Add(-1*time.Minute)))
+				},
 			},
 			{
-				name:         "device not found, runAt rescheduled",
-				runAt:        time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
-				deviceErr:    errors.New("device not found"),
-				expectUpdate: true,
+				name:      "device not found, runAt rescheduled",
+				runAt:     time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+				enabled:   1,
+				deviceErr: errors.New("device not found"),
+				expected: func(t *testing.T, jobRepo *mockJobRepo) {
+					assert.NotNil(t, jobRepo.updated)
+					updatedTime, _ := time.Parse(time.RFC3339, jobRepo.updated.RunAt)
+					assert.True(t, updatedTime.After(time.Now().Add(59*time.Minute)))
+
+					assert.NotEmpty(t, jobRepo.updated.LastTriggered)
+					lastTriggered, _ := time.Parse(time.RFC3339, jobRepo.updated.LastTriggered)
+					assert.True(t, lastTriggered.After(time.Now().Add(-1*time.Minute)))
+				},
 			},
 			{
-				name:         "job skipped",
-				runAt:        time.Now().Add(1 * time.Hour).Format(time.RFC3339),
-				expectUpdate: false,
+				name:    "job skipped when runAt is in future",
+				runAt:   time.Now().Add(1 * time.Hour).Format(time.RFC3339),
+				enabled: 1,
+				expected: func(t *testing.T, jobRepo *mockJobRepo) {
+					assert.Nil(t, jobRepo.updated)
+				},
 			},
 			{
-				name:         "error getting jobs",
-				jobErr:       errors.New("db error"),
-				wantErr:      "getting jobs: db error",
-				expectUpdate: false,
+				name:    "disabled job skipped",
+				runAt:   time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+				enabled: 0,
+				expected: func(t *testing.T, jobRepo *mockJobRepo) {
+					assert.Nil(t, jobRepo.updated)
+				},
+			},
+			{
+				name:    "error getting jobs",
+				jobErr:  errors.New("db error"),
+				wantErr: "getting jobs: db error",
+				expected: func(t *testing.T, jobRepo *mockJobRepo) {
+					assert.Nil(t, jobRepo.updated)
+				},
 			},
 		}
 
@@ -105,7 +137,7 @@ func TestProcessJobs(t *testing.T) {
 
 				jobRepo := &mockJobRepo{
 					jobs: []*models.Job{
-						{ID: 1, Devices: "[1]", Action: "1", RunAt: tt.runAt, Interval: "1h"},
+						{ID: 1, Devices: "[1]", Action: "1", RunAt: tt.runAt, Interval: "1h", Enabled: tt.enabled},
 					},
 					err: tt.jobErr,
 				}
@@ -126,16 +158,9 @@ func TestProcessJobs(t *testing.T) {
 				err := svc.processJobs(ctx)
 				if tt.wantErr == "" {
 					assert.NoError(t, err)
+					tt.expected(t, jobRepo)
 				} else {
 					assert.EqualError(t, err, tt.wantErr)
-				}
-
-				if tt.expectUpdate {
-					assert.NotNil(t, jobRepo.updated)
-					updatedTime, _ := time.Parse(time.RFC3339, jobRepo.updated.RunAt)
-					assert.True(t, updatedTime.After(time.Now().Add(59*time.Minute)))
-				} else {
-					assert.Nil(t, jobRepo.updated)
 				}
 			})
 		}
@@ -147,7 +172,7 @@ func TestRunJobs(t *testing.T) {
 
 	t.Run("stops on context cancellation", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		jobRepo := &mockJobRepo{jobs: []*models.Job{}}
+		jobRepo := &mockJobRepo{jobs: []*models.Job{{Enabled: 1}}}
 		deviceRepo := &mockDeviceRepo{}
 		actionRepo := &mockActionRepo{}
 		svc := NewService(deviceRepo, actionRepo, jobRepo, logger)

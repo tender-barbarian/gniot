@@ -34,8 +34,17 @@ func (s *Service) processJobs(ctx context.Context) error {
 	}
 
 	now := time.Now()
+	nowStr := now.Format(time.RFC3339)
 
 	for _, job := range jobs {
+		// Skip disabled jobs
+		if job.Enabled == 0 {
+			continue
+		}
+
+		// Update last_check timestamp
+		job.LastCheck = nowStr
+
 		jobTime, err := time.Parse(time.RFC3339, job.RunAt)
 		if err != nil {
 			s.logger.Error("parsing job time", "job_id", job.ID, "error", err)
@@ -66,6 +75,9 @@ func (s *Service) processJobs(ctx context.Context) error {
 				s.logger.Info("succesfully executed job", "job_name", job.Name, "deviceId", deviceId)
 			}
 		}
+
+		// Update last_triggered timestamp
+		job.LastTriggered = nowStr
 
 		interval, err := time.ParseDuration(job.Interval)
 		if err != nil {

@@ -122,18 +122,21 @@ func TestGenericRoutes_E2E(t *testing.T) {
 		{
 			name:       "jobs",
 			path:       "/jobs",
-			createBody: fmt.Sprintf(`{"name":"test-job","devices":"[1]","action":"1","run_at":"%s","interval":"1h"}`, futureTime),
+			createBody: fmt.Sprintf(`{"name":"test-job","devices":"[1]","action":"1","run_at":"%s","interval":"1h","enabled":1}`, futureTime),
+			updateBody: `{"name":"test-job-updated","interval":"2h","enabled":0}`,
 			validateGet: func(t *testing.T, body []byte) {
 				var job models.Job
 				require.NoError(t, json.Unmarshal(body, &job))
 				assert.Equal(t, "test-job", job.Name)
 				assert.Equal(t, "1h", job.Interval)
+				assert.Equal(t, 1, job.Enabled)
 			},
 			validateUpdate: func(t *testing.T, body []byte) {
 				var job models.Job
 				require.NoError(t, json.Unmarshal(body, &job))
 				assert.Equal(t, "test-job-updated", job.Name)
 				assert.Equal(t, "2h", job.Interval)
+				assert.Equal(t, 0, job.Enabled)
 			},
 		},
 	}
@@ -337,7 +340,7 @@ func TestJobRunner_E2E(t *testing.T) {
 
 	// Create job with time in the past (should execute on next tick)
 	pastTime := time.Now().Add(-1 * time.Second).Format(time.RFC3339)
-	jobBody := fmt.Sprintf(`{"name":"immediate-job","devices":"[%d]","action":"%d","run_at":"%s","interval":"1h"}`, deviceID, actionID, pastTime)
+	jobBody := fmt.Sprintf(`{"name":"immediate-job","devices":"[%d]","action":"%d","run_at":"%s","interval":"1h","enabled":1}`, deviceID, actionID, pastTime)
 	jobID := createResource(t, "/jobs", jobBody)
 
 	t.Run("job is executed", func(t *testing.T) {
@@ -345,6 +348,8 @@ func TestJobRunner_E2E(t *testing.T) {
 		job := getResource[models.Job](t, fmt.Sprintf("/jobs/%d", jobID))
 		updatedTime, _ := time.Parse(time.RFC3339, job.RunAt)
 		assert.True(t, updatedTime.After(time.Now().Add(59*time.Minute))) // Should be ~1h from now
+		assert.NotEmpty(t, job.LastTriggered)
+		assert.NotEmpty(t, job.LastCheck)
 	})
 }
 
@@ -374,27 +379,27 @@ func TestDeviceActionValidation_E2E(t *testing.T) {
 	}{
 		{
 			name:     "create device with non-existent action fails",
-			body:     `{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.50","actions":"[99999]"}`,
+			body:     `{"name":"test-device1","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.50","actions":"[99999]"}`,
 			wantCode: http.StatusBadRequest,
 		},
 		{
 			name:     "create device with mixed valid and invalid actions fails",
-			body:     fmt.Sprintf(`{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.51","actions":"[%d, 99999]"}`, validActionID),
+			body:     fmt.Sprintf(`{"name":"test-device2","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.51","actions":"[%d, 99999]"}`, validActionID),
 			wantCode: http.StatusBadRequest,
 		},
 		{
 			name:     "create device with valid action succeeds",
-			body:     fmt.Sprintf(`{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.52","actions":"[%d]"}`, validActionID),
+			body:     fmt.Sprintf(`{"name":"test-device3","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.52","actions":"[%d]"}`, validActionID),
 			wantCode: http.StatusCreated,
 		},
 		{
 			name:     "create device with empty actions succeeds",
-			body:     `{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.53","actions":""}`,
+			body:     `{"name":"test-device4","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.53","actions":""}`,
 			wantCode: http.StatusCreated,
 		},
 		{
 			name:     "create device without actions field succeeds",
-			body:     `{"name":"test-device","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.54"}`,
+			body:     `{"name":"test-device5","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.54"}`,
 			wantCode: http.StatusCreated,
 		},
 	}
