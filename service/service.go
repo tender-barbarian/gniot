@@ -11,16 +11,14 @@ import (
 type Service struct {
 	devicesRepo repository.GenericRepo[*models.Device]
 	actionsRepo repository.GenericRepo[*models.Action]
-	jobsRepo    repository.GenericRepo[*models.Job]
 	logger      *slog.Logger
 	deviceMu    sync.Map
 }
 
-func NewService(devicesRepo repository.GenericRepo[*models.Device], actionsRepo repository.GenericRepo[*models.Action], jobsRepo repository.GenericRepo[*models.Job], logger *slog.Logger) *Service {
+func NewService(devicesRepo repository.GenericRepo[*models.Device], actionsRepo repository.GenericRepo[*models.Action], logger *slog.Logger) *Service {
 	return &Service{
 		devicesRepo: devicesRepo,
 		actionsRepo: actionsRepo,
-		jobsRepo:    jobsRepo,
 		logger:      logger,
 	}
 }

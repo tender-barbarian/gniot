@@ -11,7 +11,6 @@ test-unit:
 test-integration:
 	DB_PATH=:memory: \
 	MIGRATIONS_PATH=file://$(CURDIR)/db/migrations \
-	JOBS_INTERVAL=1s \
 	go test -v -race ./tests/...
 
 # Build the application

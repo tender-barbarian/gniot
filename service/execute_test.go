@@ -55,7 +55,7 @@ func TestExecute(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				svc := NewService(tt.deviceRepo, tt.actionRepo, nil, nil)
+				svc := NewService(tt.deviceRepo, tt.actionRepo, nil)
 				_, err := svc.Execute(ctx, 1, 1)
 				assert.EqualError(t, err, tt.wantErr)
 			})
@@ -120,7 +120,7 @@ func TestExecute(t *testing.T) {
 
 				deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: server.Listener.Addr().String(), Actions: "[1,2]"}}
 				actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: tt.actionPath, Params: tt.actionParams}}
-				svc := NewService(deviceRepo, actionRepo, nil, nil)
+				svc := NewService(deviceRepo, actionRepo, nil)
 
 				_, err := svc.Execute(ctx, 1, 1)
 

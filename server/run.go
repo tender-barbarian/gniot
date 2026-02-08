@@ -44,13 +44,12 @@ func Run() error {
 
 	devicesRepo := gocrud.NewGenericRepository(db, "devices", func() *models.Device { return &models.Device{} }).WithValidate()
 	actionsRepo := gocrud.NewGenericRepository(db, "actions", func() *models.Action { return &models.Action{} })
-	jobsRepo := gocrud.NewGenericRepository(db, "jobs", func() *models.Job { return &models.Job{} })
 
 	// Initialize helpers
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	// Initialize service
-	service := service.NewService(devicesRepo, actionsRepo, jobsRepo, logger)
+	service := service.NewService(devicesRepo, actionsRepo, logger)
 
 	// Initialize handlers and routes
 	mux := http.NewServeMux()
@@ -60,7 +59,6 @@ func Run() error {
 	mux = routes.RegisterCustomRoutes(mux, customHandlers)
 	mux = routes.RegisterGenericRoutes(ctx, mux, errorHandler, devicesRepo)
 	mux = routes.RegisterGenericRoutes(ctx, mux, errorHandler, actionsRepo)
-	mux = routes.RegisterGenericRoutes(ctx, mux, errorHandler, jobsRepo)
 
 	// Initialize middleware
 	var wrappedMux http.Handler = mux
@@ -77,21 +75,6 @@ func Run() error {
 		log.Printf("listening on %s\n", httpServer.Addr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			fmt.Fprintf(os.Stderr, "listening and serving requests: %s\n", err)
-		}
-	}()
-
-	// Start job runner
-	jobErrCh := make(chan error, 10)
-	jobsInterval, err := time.ParseDuration(getEnv("JOBS_INTERVAL", "1m"))
-	if err != nil {
-		return fmt.Errorf("parsing JOBS_INTERVAL: %w", err)
-	}
-	go service.RunJobs(ctx, jobsInterval, jobErrCh)
-
-	// Handle job errors
-	go func() {
-		for err := range jobErrCh {
-			logger.Error("job runner error", "error", err)
 		}
 	}()
 

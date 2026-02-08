@@ -3,7 +3,6 @@ package tests
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -67,22 +66,4 @@ func createResource(t *testing.T, path, body string) int {
 	var result map[string]int
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 	return result["id"]
-}
-
-func getResource[T any](t *testing.T, path string, id int) T {
-	t.Helper()
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s%s/%d", baseURL, path, id), nil)
-	require.NoError(t, err)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		checkServerError(t, err)
-	}
-	defer resp.Body.Close() // nolint
-
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	var result T
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-	return result
 }
