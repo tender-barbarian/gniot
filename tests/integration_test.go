@@ -241,11 +241,7 @@ func TestGenericRoutes_E2E(t *testing.T) {
 }
 
 func TestExecuteRoute_E2E(t *testing.T) {
-	// Start mock device server for success test
-	mockDevice := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer mockDevice.Close()
+	mockDevice, receivedReq := newMockDevice(t, `{"jsonrpc":"2.0","result":{"ok":true},"id":1}`)
 
 	// Setup
 	actionID := createResource(t, "/actions", `{"name":"test-action","path":"toggle","params":"{}"}`)
@@ -254,9 +250,10 @@ func TestExecuteRoute_E2E(t *testing.T) {
 	otherActionID := createResource(t, "/actions", `{"name":"other-action","path":"other","params":"{}"}`)
 
 	tests := []struct {
-		name     string
-		body     string
-		wantCode int
+		name        string
+		body        string
+		wantCode    int
+		validateReq func(t *testing.T)
 	}{
 		{
 			name:     "missing params returns 400",
@@ -277,6 +274,14 @@ func TestExecuteRoute_E2E(t *testing.T) {
 			name:     "successful execution",
 			body:     fmt.Sprintf(`{"deviceId": %d, "actionId": %d}`, deviceID, actionID),
 			wantCode: http.StatusOK,
+			validateReq: func(t *testing.T) {
+				assert.Equal(t, http.MethodPost, receivedReq.Method)
+				assert.Equal(t, "/rpc", receivedReq.Path)
+				assert.Equal(t, "application/json", receivedReq.ContentType)
+				assert.Equal(t, "2.0", receivedReq.Body.JSONRPC)
+				assert.Equal(t, "toggle", receivedReq.Body.Method)
+				assert.Equal(t, 1, receivedReq.Body.ID)
+			},
 		},
 		{
 			name:     "unreachable device returns 500",
@@ -294,27 +299,11 @@ func TestExecuteRoute_E2E(t *testing.T) {
 			defer resp.Body.Close() // nolint
 
 			assert.Equal(t, tt.wantCode, resp.StatusCode)
+			if tt.validateReq != nil {
+				tt.validateReq(t)
+			}
 		})
 	}
-}
-
-func createResource(t *testing.T, path, body string) int {
-	t.Helper()
-	resp, err := http.Post(baseURL+path, "application/json", bytes.NewBufferString(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close() // nolint
-
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("expected 201, got %d", resp.StatusCode)
-	}
-
-	var result map[string]int
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatal(err)
-	}
-	return result["id"]
 }
 
 func TestJobRunner_E2E(t *testing.T) {
@@ -345,27 +334,12 @@ func TestJobRunner_E2E(t *testing.T) {
 
 	t.Run("job is executed", func(t *testing.T) {
 		time.Sleep(10 * time.Second)
-		job := getResource[models.Job](t, fmt.Sprintf("/jobs/%d", jobID))
+		job := getResource[models.Job](t, "/jobs/", jobID)
 		updatedTime, _ := time.Parse(time.RFC3339, job.RunAt)
 		assert.True(t, updatedTime.After(time.Now().Add(59*time.Minute))) // Should be ~1h from now
 		assert.NotEmpty(t, job.LastTriggered)
 		assert.NotEmpty(t, job.LastCheck)
 	})
-}
-
-func getResource[T any](t *testing.T, path string) T {
-	t.Helper()
-	resp, err := http.Get(baseURL + path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close() // nolint
-
-	var result T
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatal(err)
-	}
-	return result
 }
 
 func TestDeviceActionValidation_E2E(t *testing.T) {
