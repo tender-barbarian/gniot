@@ -68,7 +68,7 @@ func (s *Service) processJobs(ctx context.Context) error {
 		}
 
 		for _, deviceId := range deviceIds {
-			err := s.Execute(ctx, deviceId, actionId)
+			_, err := s.Execute(ctx, deviceId, actionId)
 			if err != nil {
 				s.logger.Error("executing job", "job_id", job.ID, "device_id", deviceId, "error", err)
 			} else {
