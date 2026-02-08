@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -16,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tender-barbarian/gniot/repository/models"
 	server "github.com/tender-barbarian/gniot/server"
-	"github.com/tender-barbarian/gniot/service"
 )
 
 const baseURL = "http://127.0.0.1:8080"
@@ -74,8 +72,6 @@ func checkServerError(t *testing.T, err error) {
 }
 
 func TestGenericRoutes_E2E(t *testing.T) {
-	futureTime := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
-
 	resources := []struct {
 		name           string
 		path           string
@@ -117,26 +113,6 @@ func TestGenericRoutes_E2E(t *testing.T) {
 				require.NoError(t, json.Unmarshal(body, &action))
 				assert.Equal(t, "toggle-led-updated", action.Name)
 				assert.Equal(t, "/api/led/toggle/updated", action.Path)
-			},
-		},
-		{
-			name:       "jobs",
-			path:       "/jobs",
-			createBody: fmt.Sprintf(`{"name":"test-job","devices":"[1]","action":"1","run_at":"%s","interval":"1h","enabled":1}`, futureTime),
-			updateBody: `{"name":"test-job-updated","interval":"2h","enabled":0}`,
-			validateGet: func(t *testing.T, body []byte) {
-				var job models.Job
-				require.NoError(t, json.Unmarshal(body, &job))
-				assert.Equal(t, "test-job", job.Name)
-				assert.Equal(t, "1h", job.Interval)
-				assert.Equal(t, 1, job.Enabled)
-			},
-			validateUpdate: func(t *testing.T, body []byte) {
-				var job models.Job
-				require.NoError(t, json.Unmarshal(body, &job))
-				assert.Equal(t, "test-job-updated", job.Name)
-				assert.Equal(t, "2h", job.Interval)
-				assert.Equal(t, 0, job.Enabled)
 			},
 		},
 	}
@@ -304,42 +280,6 @@ func TestExecuteRoute_E2E(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestJobRunner_E2E(t *testing.T) {
-	// Start mock device server
-	mockDevice := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req service.JSONRPCRequest
-		err := json.NewDecoder(r.Body).Decode(&req)
-		if err != nil {
-			t.Fatal(err)
-			return
-		}
-
-		assert.Equal(t, "toggle", req.Method)
-		assert.Equal(t, map[string]any{}, req.Params)
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer mockDevice.Close()
-
-	// Setup action and device
-	actionID := createResource(t, "/actions", `{"name":"job-action","path":"toggle","params":"{}"}`)
-	deviceID := createResource(t, "/devices", fmt.Sprintf(`{"name":"job-device","type":"sensor","chip":"esp32","board":"devkit","ip":"%s","actions":"[%d]"}`, mockDevice.Listener.Addr().String(), actionID))
-
-	// Create job with time in the past (should execute on next tick)
-	pastTime := time.Now().Add(-1 * time.Second).Format(time.RFC3339)
-	jobBody := fmt.Sprintf(`{"name":"immediate-job","devices":"[%d]","action":"%d","run_at":"%s","interval":"1h","enabled":1}`, deviceID, actionID, pastTime)
-	jobID := createResource(t, "/jobs", jobBody)
-
-	t.Run("job is executed", func(t *testing.T) {
-		time.Sleep(10 * time.Second)
-		job := getResource[models.Job](t, "/jobs/", jobID)
-		updatedTime, _ := time.Parse(time.RFC3339, job.RunAt)
-		assert.True(t, updatedTime.After(time.Now().Add(59*time.Minute))) // Should be ~1h from now
-		assert.NotEmpty(t, job.LastTriggered)
-		assert.NotEmpty(t, job.LastCheck)
-	})
 }
 
 func TestDeviceActionValidation_E2E(t *testing.T) {

@@ -117,7 +117,7 @@ func TestExecute(t *testing.T) {
 				name:         "service error returns 500",
 				mockErr:      errors.New("device not found"),
 				wantCode:     http.StatusInternalServerError,
-				wantContains: "job failed to execute",
+				wantContains: "failed to execute",
 			},
 		}
 

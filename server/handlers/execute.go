@@ -25,7 +25,7 @@ func (h *CustomHandlers) Execute(w http.ResponseWriter, r *http.Request) {
 
 	deviceResponse, err := h.service.Execute(r.Context(), *e.DeviceId, *e.ActionId)
 	if err != nil {
-		h.WriteError(w, r, err, "job failed to execute", http.StatusInternalServerError)
+		h.WriteError(w, r, err, "failed to execute", http.StatusInternalServerError)
 		return
 	}
 
