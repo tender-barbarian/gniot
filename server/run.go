@@ -42,7 +42,7 @@ func Run() error {
 	}
 	defer db.Close() // nolint
 
-	devicesRepo := gocrud.NewGenericRepository(db, "devices", func() *models.Device { return &models.Device{} })
+	devicesRepo := gocrud.NewGenericRepository(db, "devices", func() *models.Device { return &models.Device{} }).WithValidate()
 	actionsRepo := gocrud.NewGenericRepository(db, "actions", func() *models.Action { return &models.Action{} })
 	jobsRepo := gocrud.NewGenericRepository(db, "jobs", func() *models.Job { return &models.Job{} })
 

@@ -11,11 +11,11 @@ import (
 )
 
 func RegisterGenericRoutes[M gocrud.Model](ctx context.Context, mux *http.ServeMux, eh *handlers.ErrorHandler, repo repository.GenericRepo[M]) *http.ServeMux {
-	gocrud.RegisterCreate(fmt.Sprintf("POST /%s", repo.GetTable()), mux, repo.Create, repo.GetDB(), eh)
+	gocrud.RegisterCreate(fmt.Sprintf("POST /%s", repo.GetTable()), mux, repo.Create, eh)
 	gocrud.RegisterGet(fmt.Sprintf("GET /%s/{id}", repo.GetTable()), mux, repo.Get, eh)
 	gocrud.RegisterGetAll(fmt.Sprintf("GET /%s", repo.GetTable()), mux, repo.GetAll, eh)
 	gocrud.RegisterDelete(fmt.Sprintf("DELETE /%s/{id}", repo.GetTable()), mux, repo.Delete, eh)
-	gocrud.RegisterUpdate(fmt.Sprintf("POST /%s/{id}", repo.GetTable()), mux, repo.Update, repo.GetDB(), eh)
+	gocrud.RegisterUpdate(fmt.Sprintf("POST /%s/{id}", repo.GetTable()), mux, repo.Update, eh)
 
 	return mux
 }
