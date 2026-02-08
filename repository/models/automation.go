@@ -12,14 +12,15 @@ import (
 )
 
 type Automation struct {
-	ID            int             `json:"id" db:"id"`
-	Name          string          `json:"name" db:"name"`
-	Enabled       bool            `json:"enabled" db:"enabled"`
-	Definition    string          `json:"definition" db:"definition"`
-	LastCheck     string          `json:"last_check" db:"last_check"`
-	LastTriggered string          `json:"last_triggered" db:"last_triggered"`
-	CreatedAt     gocrud.NullTime `json:"created_at" db:"created_at"`
-	UpdatedAt     gocrud.NullTime `json:"updated_at" db:"updated_at"`
+	ID              int             `json:"id" db:"id"`
+	Name            string          `json:"name" db:"name"`
+	Enabled         bool            `json:"enabled" db:"enabled"`
+	Definition      string          `json:"definition" db:"definition"`
+	LastCheck       string          `json:"last_check" db:"last_check"`
+	LastTriggersRun string          `json:"last_triggers_run" db:"last_triggers_run"`
+	LastActionRun   string          `json:"last_action_run" db:"last_action_run"`
+	CreatedAt       gocrud.NullTime `json:"created_at" db:"created_at"`
+	UpdatedAt       gocrud.NullTime `json:"updated_at" db:"updated_at"`
 	gocrud.Reflection
 }
 
