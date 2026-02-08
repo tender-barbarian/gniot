@@ -4,21 +4,40 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/tender-barbarian/gniot/cache"
 	"github.com/tender-barbarian/gniot/repository"
 	"github.com/tender-barbarian/gniot/repository/models"
 )
 
-type Service struct {
-	devicesRepo repository.GenericRepo[*models.Device]
-	actionsRepo repository.GenericRepo[*models.Action]
-	logger      *slog.Logger
-	deviceMu    sync.Map
+type ServiceConfig struct {
+	DevicesRepo     repository.GenericRepo[*models.Device]
+	ActionsRepo     repository.GenericRepo[*models.Action]
+	AutomationsRepo repository.GenericRepo[*models.Automation]
+	QueryRepo       repository.Querier
+	DevicesCache    *cache.Cache[*models.Device]
+	ActionsCache    *cache.Cache[*models.Action]
+	Logger          *slog.Logger
 }
 
-func NewService(devicesRepo repository.GenericRepo[*models.Device], actionsRepo repository.GenericRepo[*models.Action], logger *slog.Logger) *Service {
+type Service struct {
+	devicesRepo     repository.GenericRepo[*models.Device]
+	actionsRepo     repository.GenericRepo[*models.Action]
+	automationsRepo repository.GenericRepo[*models.Automation]
+	queryRepo       repository.Querier
+	devicesCache    *cache.Cache[*models.Device]
+	actionsCache    *cache.Cache[*models.Action]
+	logger          *slog.Logger
+	deviceMu        sync.Map
+}
+
+func NewService(cfg ServiceConfig) *Service {
 	return &Service{
-		devicesRepo: devicesRepo,
-		actionsRepo: actionsRepo,
-		logger:      logger,
+		devicesRepo:     cfg.DevicesRepo,
+		actionsRepo:     cfg.ActionsRepo,
+		automationsRepo: cfg.AutomationsRepo,
+		queryRepo:       cfg.QueryRepo,
+		devicesCache:    cfg.DevicesCache,
+		actionsCache:    cfg.ActionsCache,
+		logger:          cfg.Logger,
 	}
 }

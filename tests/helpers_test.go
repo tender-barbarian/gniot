@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -66,4 +67,83 @@ func createResource(t *testing.T, path, body string) int {
 	var result map[string]int
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 	return result["id"]
+}
+
+func getResource[T any](t *testing.T, path string, id int) T {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s%s/%d", baseURL, path, id), nil)
+	require.NoError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		checkServerError(t, err)
+	}
+	defer resp.Body.Close() // nolint
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result T
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	return result
+}
+
+func getAllResources[T any](t *testing.T, path string) []T {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, baseURL+path, nil)
+	require.NoError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		checkServerError(t, err)
+	}
+	defer resp.Body.Close() // nolint
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var items []T
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&items))
+	return items
+}
+
+func updateResource(t *testing.T, path string, id int, body string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s%s/%d", baseURL, path, id), bytes.NewBufferString(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		checkServerError(t, err)
+	}
+	defer resp.Body.Close() // nolint
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func deleteResource(t *testing.T, path string, id int) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s%s/%d", baseURL, path, id), nil)
+	require.NoError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		checkServerError(t, err)
+	}
+	defer resp.Body.Close() // nolint
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func assertNotFound(t *testing.T, path string, id int) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s%s/%d", baseURL, path, id), nil)
+	require.NoError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		checkServerError(t, err)
+	}
+	defer resp.Body.Close() // nolint
+
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }

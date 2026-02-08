@@ -4,12 +4,33 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 
 	"github.com/tender-barbarian/gniot/repository/models"
 )
+
+// ============================================================================
+// Mock Querier
+// ============================================================================
+
+type mockQuerier struct {
+	nameToID map[string]int // key: "table:name"
+	err      error
+}
+
+func (m *mockQuerier) GetIDByName(_ context.Context, table, name string) (int, error) {
+	if m.err != nil {
+		return 0, m.err
+	}
+	id, ok := m.nameToID[table+":"+name]
+	if !ok {
+		return 0, fmt.Errorf("'%s' not found in %s", name, table)
+	}
+	return id, nil
+}
 
 // ============================================================================
 // Mock Device Repository
@@ -118,6 +139,57 @@ func (m *mockActionRepo) GetDB() *sql.DB {
 }
 
 // ============================================================================
+// Mock Automation Repository
+// ============================================================================
+
+type mockAutomationRepo struct {
+	automations []*models.Automation
+	err         error
+	updated     *models.Automation
+	updateErr   error
+	updateCalls int
+	mu          sync.Mutex
+}
+
+func (m *mockAutomationRepo) Create(ctx context.Context, model *models.Automation) (int, error) {
+	return 0, m.err
+}
+
+func (m *mockAutomationRepo) Get(ctx context.Context, id int) (*models.Automation, error) {
+	return nil, m.err
+}
+
+func (m *mockAutomationRepo) GetAll(ctx context.Context) ([]*models.Automation, error) {
+	return m.automations, m.err
+}
+
+func (m *mockAutomationRepo) Delete(ctx context.Context, id int) error {
+	return m.err
+}
+
+func (m *mockAutomationRepo) Update(ctx context.Context, model *models.Automation, id int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.updated = model
+	m.updateCalls++
+	return m.updateErr
+}
+
+func (m *mockAutomationRepo) GetTable() string {
+	return "automations"
+}
+
+func (m *mockAutomationRepo) GetDB() *sql.DB {
+	return nil
+}
+
+func (m *mockAutomationRepo) getUpdated() *models.Automation {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.updated
+}
+
+// ============================================================================
 // Recording Server (for verification)
 // ============================================================================
 
@@ -153,6 +225,12 @@ func createRecordingServer(response string, statusCode int) *recordingServer {
 	}))
 
 	return rs
+}
+
+func (rs *recordingServer) getCallCount() int {
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	return rs.callCount
 }
 
 func (rs *recordingServer) getRequests() []JSONRPCRequest {

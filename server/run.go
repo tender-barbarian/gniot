@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tender-barbarian/gniot/cache"
 	"github.com/tender-barbarian/gniot/repository"
 	"github.com/tender-barbarian/gniot/repository/models"
 	"github.com/tender-barbarian/gniot/server/handlers"
@@ -42,23 +43,50 @@ func Run() error {
 	}
 	defer db.Close() // nolint
 
-	devicesRepo := gocrud.NewGenericRepository(db, "devices", func() *models.Device { return &models.Device{} }).WithValidate()
-	actionsRepo := gocrud.NewGenericRepository(db, "actions", func() *models.Action { return &models.Action{} })
+	devicesCache := cache.NewCache[*models.Device]()
+	devicesRepo := gocrud.NewGenericRepository(db, "devices", func() *models.Device { return &models.Device{} }).WithValidate().WithOnMutate(devicesCache.InvalidateCache)
+	actionsCache := cache.NewCache[*models.Action]()
+	actionsRepo := gocrud.NewGenericRepository(db, "actions", func() *models.Action { return &models.Action{} }).WithValidate().WithOnMutate(actionsCache.InvalidateCache)
+	automationsRepo := gocrud.NewGenericRepository(db, "automations", func() *models.Automation { return &models.Automation{} }).WithValidate()
+
+	queryRepo := repository.NewQueryRepo(db, []string{"devices", "actions", "automations"})
 
 	// Initialize helpers
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	// Initialize service
-	service := service.NewService(devicesRepo, actionsRepo, logger)
+	svc := service.NewService(service.ServiceConfig{
+		DevicesRepo:     devicesRepo,
+		ActionsRepo:     actionsRepo,
+		AutomationsRepo: automationsRepo,
+		QueryRepo:       queryRepo,
+		DevicesCache:    devicesCache,
+		ActionsCache:    actionsCache,
+		Logger:          logger,
+	})
 
 	// Initialize handlers and routes
 	mux := http.NewServeMux()
 	mux.Handle("/", http.NotFoundHandler())
 	errorHandler := handlers.NewErrorHandler(logger)
-	customHandlers := handlers.NewCustomHandlers(logger, service, errorHandler)
+	customHandlers := handlers.NewCustomHandlers(logger, svc, errorHandler)
 	mux = routes.RegisterCustomRoutes(mux, customHandlers)
 	mux = routes.RegisterGenericRoutes(ctx, mux, errorHandler, devicesRepo)
 	mux = routes.RegisterGenericRoutes(ctx, mux, errorHandler, actionsRepo)
+	mux = routes.RegisterGenericRoutes(ctx, mux, errorHandler, automationsRepo)
+
+	// Start automation runner
+	automationsInterval, err := time.ParseDuration(getEnv("AUTOMATIONS_INTERVAL", "1m"))
+	if err != nil {
+		return fmt.Errorf("parsing AUTOMATIONS_INTERVAL: %v", err)
+	}
+	automationErrCh := make(chan error, 100)
+	go svc.RunAutomations(ctx, automationsInterval, automationErrCh)
+	go func() {
+		for err := range automationErrCh {
+			logger.Error("automation error", "error", err)
+		}
+	}()
 
 	// Initialize middleware
 	var wrappedMux http.Handler = mux

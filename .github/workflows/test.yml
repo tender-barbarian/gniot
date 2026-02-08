@@ -44,4 +44,5 @@ jobs:
         env:
           DB_PATH: ":memory:"
           MIGRATIONS_PATH: file://${{ github.workspace }}/db/migrations
+          AUTOMATIONS_INTERVAL: "1s"
         run: go test -v -race ./tests/...

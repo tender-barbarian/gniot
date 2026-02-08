@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tender-barbarian/gniot/cache"
 	"github.com/tender-barbarian/gniot/repository/models"
 )
 
@@ -55,7 +56,13 @@ func TestExecute(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				svc := NewService(tt.deviceRepo, tt.actionRepo, nil)
+				svc := NewService(ServiceConfig{
+					DevicesRepo:  tt.deviceRepo,
+					ActionsRepo:  tt.actionRepo,
+					QueryRepo:    &mockQuerier{},
+					DevicesCache: cache.NewCache[*models.Device](),
+					ActionsCache: cache.NewCache[*models.Action](),
+				})
 				_, err := svc.Execute(ctx, 1, 1)
 				assert.EqualError(t, err, tt.wantErr)
 			})
@@ -120,7 +127,13 @@ func TestExecute(t *testing.T) {
 
 				deviceRepo := &mockDeviceRepo{device: &models.Device{ID: 1, IP: server.Listener.Addr().String(), Actions: "[1,2]"}}
 				actionRepo := &mockActionRepo{action: &models.Action{ID: 1, Path: tt.actionPath, Params: tt.actionParams}}
-				svc := NewService(deviceRepo, actionRepo, nil)
+				svc := NewService(ServiceConfig{
+					DevicesRepo:  deviceRepo,
+					ActionsRepo:  actionRepo,
+					QueryRepo:    &mockQuerier{},
+					DevicesCache: cache.NewCache[*models.Device](),
+					ActionsCache: cache.NewCache[*models.Action](),
+				})
 
 				_, err := svc.Execute(ctx, 1, 1)
 

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"testing"
@@ -15,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tender-barbarian/gniot/repository/models"
 	server "github.com/tender-barbarian/gniot/server"
+	"gopkg.in/yaml.v3"
 )
 
 const baseURL = "http://127.0.0.1:8080"
@@ -22,6 +22,8 @@ const baseURL = "http://127.0.0.1:8080"
 var serverErrCh chan error
 
 func TestMain(m *testing.M) {
+	os.Setenv("AUTOMATIONS_INTERVAL", "1s") // nolint
+
 	serverErrCh = make(chan error, 1)
 	go func() {
 		if err := server.Run(); err != nil {
@@ -71,149 +73,122 @@ func checkServerError(t *testing.T, err error) {
 	}
 }
 
-func TestGenericRoutes_E2E(t *testing.T) {
-	resources := []struct {
-		name           string
-		path           string
-		createBody     string
-		updateBody     string
-		validateGet    func(t *testing.T, body []byte)
-		validateUpdate func(t *testing.T, body []byte)
+func TestDevices_CRUD(t *testing.T) {
+	expectedResources := []models.Device{
+		{Name: "esp32-sensor", Type: "sensor", Chip: "esp32", Board: "devkit", IP: "192.168.1.100"},
+		{Name: "esp32-relay", Type: "actuator", Chip: "esp32", Board: "devkit", IP: "192.168.1.101"},
+		{Name: "esp8266-temp", Type: "sensor", Chip: "esp8266", Board: "nodemcu", IP: "192.168.1.102"},
+	}
+
+	ids := make([]int, len(expectedResources))
+	for i, expectedResource := range expectedResources {
+		body, err := json.Marshal(expectedResource)
+		require.NoError(t, err)
+		ids[i] = createResource(t, "/devices", string(body))
+	}
+
+	t.Run("test device get", func(t *testing.T) {
+		actualResource := getResource[models.Device](t, "/devices", ids[0])
+		assert.Equal(t, expectedResources[0].Name, actualResource.Name)
+		assert.Equal(t, expectedResources[0].IP, actualResource.IP)
+	})
+
+	t.Run("test device getAll", func(t *testing.T) {
+		actualResources := getAllResources[models.Device](t, "/devices")
+		require.Equal(t, len(expectedResources), len(actualResources))
+		for i, expectedResource := range expectedResources {
+			assert.Equal(t, expectedResource.Name, actualResources[i].Name, "device[%d] Name", i)
+			assert.Equal(t, expectedResource.Type, actualResources[i].Type, "device[%d] Type", i)
+			assert.Equal(t, expectedResource.Chip, actualResources[i].Chip, "device[%d] Chip", i)
+			assert.Equal(t, expectedResource.Board, actualResources[i].Board, "device[%d] Board", i)
+			assert.Equal(t, expectedResource.IP, actualResources[i].IP, "device[%d] IP", i)
+		}
+	})
+
+	t.Run("test device update", func(t *testing.T) {
+		wantUpdated := models.Device{Name: "esp32-updated", Type: "actuator", Chip: "esp32", Board: "devkit", IP: "192.168.1.200"}
+		updateResource(t, "/devices", ids[0], fmt.Sprintf(
+			`{"name":"%s","type":"%s","chip":"%s","board":"%s","ip":"%s"}`,
+			wantUpdated.Name, wantUpdated.Type, wantUpdated.Chip, wantUpdated.Board, wantUpdated.IP,
+		))
+
+		updated := getResource[models.Device](t, "/devices", ids[0])
+		assert.Equal(t, wantUpdated.Name, updated.Name)
+		assert.Equal(t, wantUpdated.IP, updated.IP)
+	})
+
+	t.Run("test device delete", func(t *testing.T) {
+		for _, id := range ids {
+			deleteResource(t, "/devices", id)
+			assertNotFound(t, "/devices", id)
+		}
+	})
+}
+
+func TestDevices_ActionValidation(t *testing.T) {
+	validActionID := createResource(t, "/actions", `{"name":"valid-action","path":"test","params":"{}"}`)
+	deviceID := createResource(t, "/devices", `{"name":"dev-for-update","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.60"}`)
+
+	tests := []struct {
+		name     string
+		path     string
+		body     string
+		wantCode int
 	}{
 		{
-			name:       "devices",
-			path:       "/devices",
-			createBody: `{"name":"esp32-sensor","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.100"}`,
-			updateBody: `{"name":"esp32-updated","type":"actuator","chip":"esp32","board":"devkit","ip":"192.168.1.101"}`,
-			validateGet: func(t *testing.T, body []byte) {
-				var device models.Device
-				require.NoError(t, json.Unmarshal(body, &device))
-				assert.Equal(t, "esp32-sensor", device.Name)
-				assert.Equal(t, "192.168.1.100", device.IP)
-			},
-			validateUpdate: func(t *testing.T, body []byte) {
-				var device models.Device
-				require.NoError(t, json.Unmarshal(body, &device))
-				assert.Equal(t, "esp32-updated", device.Name)
-				assert.Equal(t, "192.168.1.101", device.IP)
-			},
+			name:     "create with non-existent action fails",
+			path:     "/devices",
+			body:     `{"name":"d1","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.50","actions":"[99999]"}`,
+			wantCode: http.StatusBadRequest,
 		},
 		{
-			name:       "actions",
-			path:       "/actions",
-			createBody: `{"name":"toggle-led","path":"/api/led/toggle","params":"{\"brightness\":100}"}`,
-			validateGet: func(t *testing.T, body []byte) {
-				var action models.Action
-				require.NoError(t, json.Unmarshal(body, &action))
-				assert.Equal(t, "toggle-led", action.Name)
-				assert.Equal(t, "/api/led/toggle", action.Path)
-			},
-			validateUpdate: func(t *testing.T, body []byte) {
-				var action models.Action
-				require.NoError(t, json.Unmarshal(body, &action))
-				assert.Equal(t, "toggle-led-updated", action.Name)
-				assert.Equal(t, "/api/led/toggle/updated", action.Path)
-			},
+			name:     "create with mixed valid and invalid actions fails",
+			path:     "/devices",
+			body:     fmt.Sprintf(`{"name":"d2","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.51","actions":"[%d, 99999]"}`, validActionID),
+			wantCode: http.StatusBadRequest,
+		},
+		{
+			name:     "create with valid action succeeds",
+			path:     "/devices",
+			body:     fmt.Sprintf(`{"name":"d3","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.52","actions":"[%d]"}`, validActionID),
+			wantCode: http.StatusCreated,
+		},
+		{
+			name:     "create with empty actions succeeds",
+			path:     "/devices",
+			body:     `{"name":"d4","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.53","actions":""}`,
+			wantCode: http.StatusCreated,
+		},
+		{
+			name:     "update with non-existent action fails",
+			path:     fmt.Sprintf("/devices/%d", deviceID),
+			body:     `{"actions":"[99999]"}`,
+			wantCode: http.StatusBadRequest,
+		},
+		{
+			name:     "update with valid action succeeds",
+			path:     fmt.Sprintf("/devices/%d", deviceID),
+			body:     fmt.Sprintf(`{"actions":"[%d]"}`, validActionID),
+			wantCode: http.StatusOK,
 		},
 	}
 
-	for _, res := range resources {
-		t.Run(res.name, func(t *testing.T) {
-			var createdID int
-
-			t.Run("POST creates resource", func(t *testing.T) {
-				resp, err := http.Post(baseURL+res.path, "application/json", bytes.NewBufferString(res.createBody))
-				if err != nil {
-					checkServerError(t, err)
-				}
-				defer resp.Body.Close() // nolint
-
-				require.Equal(t, http.StatusCreated, resp.StatusCode)
-
-				var result map[string]int
-				require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
-				createdID = result["id"]
-				assert.Greater(t, createdID, 0)
-			})
-
-			t.Run("GET returns resource", func(t *testing.T) {
-				resp, err := http.Get(fmt.Sprintf("%s%s/%d", baseURL, res.path, createdID))
-				if err != nil {
-					checkServerError(t, err)
-				}
-				defer resp.Body.Close() // nolint
-
-				require.Equal(t, http.StatusOK, resp.StatusCode)
-
-				body, err := io.ReadAll(resp.Body)
-				require.NoError(t, err)
-				res.validateGet(t, body)
-			})
-
-			t.Run("GET returns list", func(t *testing.T) {
-				resp, err := http.Get(baseURL + res.path)
-				if err != nil {
-					checkServerError(t, err)
-				}
-				defer resp.Body.Close() // nolint
-
-				require.Equal(t, http.StatusOK, resp.StatusCode)
-
-				var items []json.RawMessage
-				require.NoError(t, json.NewDecoder(resp.Body).Decode(&items))
-				assert.GreaterOrEqual(t, len(items), 1)
-			})
-
-			if res.updateBody != "" {
-				t.Run("POST updates resource", func(t *testing.T) {
-					resp, err := http.Post(fmt.Sprintf("%s%s/%d", baseURL, res.path, createdID), "application/json", bytes.NewBufferString(res.updateBody))
-					if err != nil {
-						checkServerError(t, err)
-					}
-					defer resp.Body.Close() // nolint
-
-					require.Equal(t, http.StatusOK, resp.StatusCode)
-				})
-
-				t.Run("GET returns updated resource", func(t *testing.T) {
-					resp, err := http.Get(fmt.Sprintf("%s%s/%d", baseURL, res.path, createdID))
-					if err != nil {
-						checkServerError(t, err)
-					}
-					defer resp.Body.Close() // nolint
-
-					require.Equal(t, http.StatusOK, resp.StatusCode)
-
-					body, err := io.ReadAll(resp.Body)
-					require.NoError(t, err)
-					res.validateUpdate(t, body)
-				})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := http.Post(baseURL+tt.path, "application/json", bytes.NewBufferString(tt.body))
+			if err != nil {
+				checkServerError(t, err)
 			}
+			defer resp.Body.Close() // nolint
 
-			t.Run("DELETE removes resource", func(t *testing.T) {
-				req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s%s/%d", baseURL, res.path, createdID), nil)
-				require.NoError(t, err)
-
-				resp, err := http.DefaultClient.Do(req)
-				if err != nil {
-					checkServerError(t, err)
-				}
-				defer resp.Body.Close() // nolint
-
-				require.Equal(t, http.StatusOK, resp.StatusCode)
-			})
-
-			t.Run("GET returns 404 after deletion", func(t *testing.T) {
-				resp, err := http.Get(fmt.Sprintf("%s%s/%d", baseURL, res.path, createdID))
-				if err != nil {
-					checkServerError(t, err)
-				}
-				defer resp.Body.Close() // nolint
-
-				require.Equal(t, http.StatusNotFound, resp.StatusCode)
-			})
+			assert.Equal(t, tt.wantCode, resp.StatusCode)
 		})
 	}
+
+	t.Cleanup(func() {
+		deleteResource(t, "/actions", validActionID)
+		deleteResource(t, "/devices", deviceID)
+	})
 }
 
 func TestExecuteRoute_E2E(t *testing.T) {
@@ -282,87 +257,159 @@ func TestExecuteRoute_E2E(t *testing.T) {
 	}
 }
 
-func TestDeviceActionValidation_E2E(t *testing.T) {
-	// Create a valid action first
-	validActionID := createResource(t, "/actions", `{"name":"valid-action","path":"test","params":"{}"}`)
+func TestAutomations_DefinitionValidation(t *testing.T) {
+	readTempID := createResource(t, "/actions", `{"name":"read-temp","path":"read_temp","params":"{}"}`)
+	turnOnID := createResource(t, "/actions", `{"name":"turn-on","path":"turn_on","params":"{}"}`)
+	unassignedActionID := createResource(t, "/actions", `{"name":"unassigned-action","path":"unassigned","params":"{}"}`)
+
+	triggerDevice, triggerReq := newMockDevice(t, `{"jsonrpc":"2.0","result":{"temperature":30},"id":1}`)
+	triggerDeviceID := createResource(t, "/devices", fmt.Sprintf(
+		`{"name":"sensor-1","type":"sensor","chip":"esp32","board":"devkit","ip":"%s","actions":"[%d]"}`, triggerDevice.Listener.Addr().String(), readTempID))
+
+	actionDevice, actionReq := newMockDevice(t, `{"jsonrpc":"2.0","result":{"ok":true},"id":1}`)
+	actionDeviceID := createResource(t, "/devices", fmt.Sprintf(
+		`{"name":"actuator-1","type":"actuator","chip":"esp32","board":"devkit","ip":"%s","actions":"[%d]"}`, actionDevice.Listener.Addr().String(), turnOnID))
 
 	tests := []struct {
-		name     string
-		body     string
-		wantCode int
+		name               string
+		interval           string
+		triggers           []models.AutomationTrigger
+		actions            []models.AutomationAction
+		wantCode           int
+		validateTriggerReq func(t *testing.T)
+		validateActionReq  func(t *testing.T)
 	}{
 		{
-			name:     "create device with non-existent action fails",
-			body:     `{"name":"test-device1","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.50","actions":"[99999]"}`,
+			name:     "trigger referencing non-existent device",
+			interval: "5m",
+			triggers: []models.AutomationTrigger{{Device: "no-such-device", Action: "read-temp", Conditions: []models.AutomationCondition{
+				{Field: "temperature", Operator: ">", Threshold: 25},
+			}}},
+			actions:  []models.AutomationAction{{Device: "actuator-1", Action: "turn-on"}},
 			wantCode: http.StatusBadRequest,
 		},
 		{
-			name:     "create device with mixed valid and invalid actions fails",
-			body:     fmt.Sprintf(`{"name":"test-device2","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.51","actions":"[%d, 99999]"}`, validActionID),
+			name:     "trigger referencing non-existent action",
+			interval: "5m",
+			triggers: []models.AutomationTrigger{{Device: "sensor-1", Action: "no-such-action", Conditions: []models.AutomationCondition{
+				{Field: "temperature", Operator: ">", Threshold: 25},
+			}}},
+			actions:  []models.AutomationAction{{Device: "actuator-1", Action: "turn-on"}},
 			wantCode: http.StatusBadRequest,
 		},
 		{
-			name:     "create device with valid action succeeds",
-			body:     fmt.Sprintf(`{"name":"test-device3","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.52","actions":"[%d]"}`, validActionID),
-			wantCode: http.StatusCreated,
+			name:     "trigger action not assigned to device",
+			interval: "5m",
+			triggers: []models.AutomationTrigger{{Device: "sensor-1", Action: "turn-on", Conditions: []models.AutomationCondition{
+				{Field: "temperature", Operator: ">", Threshold: 25},
+			}}},
+			actions:  []models.AutomationAction{{Device: "actuator-1", Action: "turn-on"}},
+			wantCode: http.StatusBadRequest,
 		},
 		{
-			name:     "create device with empty actions succeeds",
-			body:     `{"name":"test-device4","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.53","actions":""}`,
-			wantCode: http.StatusCreated,
+			name:     "action device not found",
+			interval: "5m",
+			triggers: []models.AutomationTrigger{{Device: "sensor-1", Action: "read-temp", Conditions: []models.AutomationCondition{
+				{Field: "temperature", Operator: ">", Threshold: 25},
+			}}},
+			actions:  []models.AutomationAction{{Device: "no-such-device", Action: "turn-on"}},
+			wantCode: http.StatusBadRequest,
 		},
 		{
-			name:     "create device without actions field succeeds",
-			body:     `{"name":"test-device5","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.54"}`,
-			wantCode: http.StatusCreated,
+			name:     "action not assigned to device",
+			interval: "5m",
+			triggers: []models.AutomationTrigger{{Device: "sensor-1", Action: "read-temp", Conditions: []models.AutomationCondition{
+				{Field: "temperature", Operator: ">", Threshold: 25},
+			}}},
+			actions:  []models.AutomationAction{{Device: "actuator-1", Action: "unassigned-action"}},
+			wantCode: http.StatusBadRequest,
+		},
+		{
+			name:     "valid definition succeeds",
+			interval: "1s",
+			triggers: []models.AutomationTrigger{{Device: "sensor-1", Action: "read-temp", Conditions: []models.AutomationCondition{
+				{Field: "temperature", Operator: ">", Threshold: 25},
+			}}},
+			actions: []models.AutomationAction{{Device: "actuator-1", Action: "turn-on"}},
+			wantCode:   http.StatusCreated,
+			validateTriggerReq: func(t *testing.T) {
+				snap := triggerReq.Get()
+				assert.Equal(t, http.MethodPost, snap.Method)
+				assert.Equal(t, "/rpc", snap.Path)
+				assert.Equal(t, "application/json", snap.ContentType)
+				assert.Equal(t, "2.0", snap.Body.JSONRPC)
+				assert.Equal(t, "read_temp", snap.Body.Method)
+				assert.Equal(t, 1, snap.Body.ID)
+			},
+			validateActionReq: func(t *testing.T) {
+				snap := actionReq.Get()
+				assert.Equal(t, http.MethodPost, snap.Method)
+				assert.Equal(t, "/rpc", snap.Path)
+				assert.Equal(t, "application/json", snap.ContentType)
+				assert.Equal(t, "2.0", snap.Body.JSONRPC)
+				assert.Equal(t, "turn_on", snap.Body.Method)
+				assert.Equal(t, 1, snap.Body.ID)
+			},
 		},
 	}
 
+	var createdAutomationIDs []int
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := http.Post(baseURL+"/devices", "application/json", bytes.NewBufferString(tt.body))
+			def := models.AutomationDefinition{
+				Interval: tt.interval,
+				Triggers: tt.triggers,
+				Actions:  tt.actions,
+			}
+			defYAML, err := yaml.Marshal(def)
+			require.NoError(t, err)
+
+			body, err := json.Marshal(map[string]any{
+				"name":       tt.name,
+				"enabled":    true,
+				"definition": string(defYAML),
+			})
+			require.NoError(t, err)
+
+			resp, err := http.Post(baseURL+"/automations", "application/json", bytes.NewBuffer(body))
 			if err != nil {
 				checkServerError(t, err)
 			}
 			defer resp.Body.Close() // nolint
 
 			assert.Equal(t, tt.wantCode, resp.StatusCode)
+
+			if resp.StatusCode == http.StatusCreated {
+				var result map[string]int
+				require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+				createdAutomationIDs = append(createdAutomationIDs, result["id"])
+			}
+
+			if tt.validateTriggerReq != nil {
+				require.Eventually(t, func() bool {
+					return triggerReq.Get().Method != ""
+				}, 10*time.Second, 200*time.Millisecond, "automation should have called a trigger device")
+				tt.validateTriggerReq(t)
+			}
+
+			if tt.validateActionReq != nil {
+				require.Eventually(t, func() bool {
+					return actionReq.Get().Method != ""
+				}, 10*time.Second, 200*time.Millisecond, "automation should have called an action device")
+				tt.validateActionReq(t)
+			}
 		})
 	}
 
-	t.Run("update device with non-existent action fails", func(t *testing.T) {
-		// Create a device without actions
-		deviceID := createResource(t, "/devices", `{"name":"update-test","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.60"}`)
-
-		// Try to update with non-existent action
-		resp, err := http.Post(
-			fmt.Sprintf("%s/devices/%d", baseURL, deviceID),
-			"application/json",
-			bytes.NewBufferString(`{"actions":"[99999]"}`),
-		)
-		if err != nil {
-			checkServerError(t, err)
+	t.Cleanup(func() {
+		for _, id := range createdAutomationIDs {
+			deleteResource(t, "/automations", id)
 		}
-		defer resp.Body.Close() // nolint
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	})
-
-	t.Run("update device with valid action succeeds", func(t *testing.T) {
-		// Create a device without actions
-		deviceID := createResource(t, "/devices", `{"name":"update-test-2","type":"sensor","chip":"esp32","board":"devkit","ip":"192.168.1.61"}`)
-
-		// Update with valid action
-		resp, err := http.Post(
-			fmt.Sprintf("%s/devices/%d", baseURL, deviceID),
-			"application/json",
-			bytes.NewBufferString(fmt.Sprintf(`{"actions":"[%d]"}`, validActionID)),
-		)
-		if err != nil {
-			checkServerError(t, err)
-		}
-		defer resp.Body.Close() // nolint
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		deleteResource(t, "/devices", triggerDeviceID)
+		deleteResource(t, "/devices", actionDeviceID)
+		deleteResource(t, "/actions", readTempID)
+		deleteResource(t, "/actions", turnOnID)
+		deleteResource(t, "/actions", unassignedActionID)
 	})
 }
