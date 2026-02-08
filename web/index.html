@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GNIOT</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>GNIOT</h1>
+    <nav>
+      <button data-tab="devices" class="active">Devices</button>
+      <button data-tab="actions">Actions</button>
+      <button data-tab="automations">Automations</button>
+      <button data-tab="execute">Execute</button>
+    </nav>
+    <div style="flex:1"></div>
+    <label class="theme-toggle">
+      <span class="theme-icon" id="theme-icon">&#9788;</span>
+      <input type="checkbox" id="theme-switch">
+      <span class="toggle-track"></span>
+    </label>
+  </header>
+
+  <main>
+    <!-- DEVICES TAB -->
+    <section id="tab-devices" class="tab-content active">
+      <h2>Devices</h2>
+      <div id="devices-banner" class="banner"></div>
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Type</th><th>Chip</th><th>Board</th><th>IP</th><th>Actions</th><th></th></tr>
+        </thead>
+        <tbody id="devices-table"></tbody>
+      </table>
+      <div class="form-section">
+        <h2 id="devices-form-title">Add Device</h2>
+        <form id="devices-form">
+          <input type="hidden" id="device-id">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="device-name">Name</label>
+              <input type="text" id="device-name" required>
+            </div>
+            <div class="form-group">
+              <label for="device-type">Type</label>
+              <input type="text" id="device-type" required>
+            </div>
+            <div class="form-group">
+              <label for="device-chip">Chip</label>
+              <input type="text" id="device-chip" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="device-board">Board</label>
+              <input type="text" id="device-board" required>
+            </div>
+            <div class="form-group">
+              <label for="device-ip">IP</label>
+              <input type="text" id="device-ip" required>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:0.75rem">
+            <label>Assigned Actions</label>
+            <div id="device-actions-checkboxes" class="checkbox-group"></div>
+          </div>
+          <div class="btn-row">
+            <button type="submit" class="btn btn-primary">Save Device</button>
+            <button type="button" class="btn btn-secondary" onclick="resetDeviceForm()">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ACTIONS TAB -->
+    <section id="tab-actions" class="tab-content">
+      <h2>Actions</h2>
+      <div id="actions-banner" class="banner"></div>
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Path</th><th>Params</th><th></th></tr>
+        </thead>
+        <tbody id="actions-table"></tbody>
+      </table>
+      <div class="form-section">
+        <h2 id="actions-form-title">Add Action</h2>
+        <form id="actions-form">
+          <input type="hidden" id="action-id">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="action-name">Name</label>
+              <input type="text" id="action-name" required>
+            </div>
+            <div class="form-group">
+              <label for="action-path">Path</label>
+              <input type="text" id="action-path" required>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:0.75rem">
+            <label for="action-params">Params (JSON)</label>
+            <textarea id="action-params" placeholder='{"key": "value"}'></textarea>
+          </div>
+          <div class="btn-row">
+            <button type="submit" class="btn btn-primary">Save Action</button>
+            <button type="button" class="btn btn-secondary" onclick="resetActionForm()">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- AUTOMATIONS TAB -->
+    <section id="tab-automations" class="tab-content">
+      <h2>Automations</h2>
+      <div id="automations-banner" class="banner"></div>
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Enabled</th><th>Interval</th><th>Last Check</th><th>Last Run</th><th></th></tr>
+        </thead>
+        <tbody id="automations-table"></tbody>
+      </table>
+      <div class="form-section">
+        <h2 id="automations-form-title">Add Automation</h2>
+        <form id="automations-form">
+          <input type="hidden" id="automation-id">
+          <div class="builder-layout">
+            <div class="builder-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="auto-name">Name</label>
+                  <input type="text" id="auto-name" required>
+                </div>
+                <div class="form-group" style="flex:0 0 auto; min-width:auto">
+                  <label>&nbsp;</label>
+                  <label class="inline-check">
+                    <input type="checkbox" id="auto-enabled" checked><span class="toggle-track"></span> Enabled
+                  </label>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="auto-interval">Interval</label>
+                  <input type="text" id="auto-interval" placeholder="5m" required>
+                </div>
+                <div class="form-group">
+                  <label for="auto-logic">Condition Logic</label>
+                  <select id="auto-logic">
+                    <option value="">default (and)</option>
+                    <option value="and">and</option>
+                    <option value="or">or</option>
+                  </select>
+                </div>
+              </div>
+
+              <h2 style="margin-top:1rem">Triggers</h2>
+              <div id="triggers-container"></div>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="addTrigger()">+ Add Trigger</button>
+
+              <h2 style="margin-top:1rem">Actions</h2>
+              <div id="auto-actions-container"></div>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="addAutoAction()">+ Add Action</button>
+
+              <div class="btn-row" style="margin-top:1rem">
+                <button type="submit" class="btn btn-primary">Save Automation</button>
+                <button type="button" class="btn btn-secondary" onclick="resetAutomationForm()">Cancel</button>
+              </div>
+            </div>
+            <div>
+              <label style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">YAML Preview</label>
+              <div id="yaml-preview" class="yaml-preview">-- fill the form to see preview --</div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- EXECUTE TAB -->
+    <section id="tab-execute" class="tab-content">
+      <h2>Execute Action</h2>
+      <div id="execute-banner" class="banner"></div>
+      <div class="form-section">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="exec-device">Device</label>
+            <select id="exec-device"><option value="">Select device...</option></select>
+          </div>
+          <div class="form-group">
+            <label for="exec-action">Action</label>
+            <select id="exec-action"><option value="">Select action...</option></select>
+          </div>
+          <div class="form-group" style="flex:0 0 auto; min-width:auto">
+            <label>&nbsp;</label>
+            <button type="button" class="btn btn-primary" onclick="handleExecute()">Execute</button>
+          </div>
+        </div>
+      </div>
+      <div id="execute-response" class="response-display">-- response will appear here --</div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/tender-barbarian/gniot/cache"
+	"github.com/tender-barbarian/gniot/web"
 	"github.com/tender-barbarian/gniot/repository"
 	"github.com/tender-barbarian/gniot/repository/models"
 	"github.com/tender-barbarian/gniot/server/handlers"
@@ -67,7 +68,7 @@ func Run() error {
 
 	// Initialize handlers and routes
 	mux := http.NewServeMux()
-	mux.Handle("/", http.NotFoundHandler())
+	mux.Handle("/", http.FileServerFS(web.StaticFiles))
 	errorHandler := handlers.NewErrorHandler(logger)
 	customHandlers := handlers.NewCustomHandlers(logger, svc, errorHandler)
 	mux = routes.RegisterCustomRoutes(mux, customHandlers)
