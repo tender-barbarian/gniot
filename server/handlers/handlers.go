@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/tender-barbarian/gniot/service"
+	"github.com/tender-barbarian/gniotek/service"
 )
 
 type Executor interface {

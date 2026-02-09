@@ -1,4 +1,4 @@
-module github.com/tender-barbarian/gniot
+module github.com/tender-barbarian/gniotek
 
 go 1.25.3
 

@@ -4,9 +4,9 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/tender-barbarian/gniot/cache"
-	"github.com/tender-barbarian/gniot/repository"
-	"github.com/tender-barbarian/gniot/repository/models"
+	"github.com/tender-barbarian/gniotek/cache"
+	"github.com/tender-barbarian/gniotek/repository"
+	"github.com/tender-barbarian/gniotek/repository/models"
 )
 
 type ServiceConfig struct {

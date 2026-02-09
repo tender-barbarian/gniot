@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"sync"
 
-	"github.com/tender-barbarian/gniot/repository/models"
+	"github.com/tender-barbarian/gniotek/repository/models"
 )
 
 // ============================================================================

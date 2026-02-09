@@ -12,14 +12,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tender-barbarian/gniot/cache"
-	"github.com/tender-barbarian/gniot/web"
-	"github.com/tender-barbarian/gniot/repository"
-	"github.com/tender-barbarian/gniot/repository/models"
-	"github.com/tender-barbarian/gniot/server/handlers"
-	"github.com/tender-barbarian/gniot/server/middleware"
-	"github.com/tender-barbarian/gniot/server/routes"
-	"github.com/tender-barbarian/gniot/service"
+	"github.com/tender-barbarian/gniotek/cache"
+	"github.com/tender-barbarian/gniotek/repository"
+	"github.com/tender-barbarian/gniotek/repository/models"
+	"github.com/tender-barbarian/gniotek/server/handlers"
+	"github.com/tender-barbarian/gniotek/server/middleware"
+	"github.com/tender-barbarian/gniotek/server/routes"
+	"github.com/tender-barbarian/gniotek/service"
+	"github.com/tender-barbarian/gniotek/web"
 	gocrud "github.com/tender-barbarian/go-crud"
 )
 
@@ -35,7 +35,7 @@ func Run() error {
 	defer cancel()
 
 	// Start DB
-	dbPath := getEnv("DB_PATH", "./gniot.db")
+	dbPath := getEnv("DB_PATH", "./gniotek.db")
 	migrationsPath := getEnv("MIGRATIONS_PATH", "file://../db/migrations")
 
 	db, err := repository.NewDBConnection(dbPath, migrationsPath)

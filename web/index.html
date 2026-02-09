@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GNIOT</title>
+  <title>gniotek</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <h1>GNIOT</h1>
+    <h1>gniotek</h1>
     <nav>
       <button data-tab="devices" class="active">Devices</button>
       <button data-tab="actions">Actions</button>
@@ -30,7 +30,15 @@
       <div id="devices-banner" class="banner"></div>
       <table>
         <thead>
-          <tr><th>Name</th><th>Type</th><th>Chip</th><th>Board</th><th>IP</th><th>Actions</th><th></th></tr>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Chip</th>
+            <th>Board</th>
+            <th>IP</th>
+            <th>Actions</th>
+            <th></th>
+          </tr>
         </thead>
         <tbody id="devices-table"></tbody>
       </table>
@@ -80,7 +88,12 @@
       <div id="actions-banner" class="banner"></div>
       <table>
         <thead>
-          <tr><th>Name</th><th>Path</th><th>Params</th><th></th></tr>
+          <tr>
+            <th>Name</th>
+            <th>Path</th>
+            <th>Params</th>
+            <th></th>
+          </tr>
         </thead>
         <tbody id="actions-table"></tbody>
       </table>
@@ -116,7 +129,14 @@
       <div id="automations-banner" class="banner"></div>
       <table>
         <thead>
-          <tr><th>Name</th><th>Enabled</th><th>Interval</th><th>Last Check</th><th>Last Run</th><th></th></tr>
+          <tr>
+            <th>Name</th>
+            <th>Enabled</th>
+            <th>Interval</th>
+            <th>Last Check</th>
+            <th>Last Run</th>
+            <th></th>
+          </tr>
         </thead>
         <tbody id="automations-table"></tbody>
       </table>
@@ -183,11 +203,15 @@
         <div class="form-row">
           <div class="form-group">
             <label for="exec-device">Device</label>
-            <select id="exec-device"><option value="">Select device...</option></select>
+            <select id="exec-device">
+              <option value="">Select device...</option>
+            </select>
           </div>
           <div class="form-group">
             <label for="exec-action">Action</label>
-            <select id="exec-action"><option value="">Select action...</option></select>
+            <select id="exec-action">
+              <option value="">Select action...</option>
+            </select>
           </div>
           <div class="form-group" style="flex:0 0 auto; min-width:auto">
             <label>&nbsp;</label>

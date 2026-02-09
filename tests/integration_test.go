@@ -12,8 +12,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tender-barbarian/gniot/repository/models"
-	server "github.com/tender-barbarian/gniot/server"
+	"github.com/tender-barbarian/gniotek/repository/models"
+	server "github.com/tender-barbarian/gniotek/server"
 	"gopkg.in/yaml.v3"
 )
 
@@ -330,8 +330,8 @@ func TestAutomations_DefinitionValidation(t *testing.T) {
 			triggers: []models.AutomationTrigger{{Device: "sensor-1", Action: "read-temp", Conditions: []models.AutomationCondition{
 				{Field: "temperature", Operator: ">", Threshold: 25},
 			}}},
-			actions: []models.AutomationAction{{Device: "actuator-1", Action: "turn-on"}},
-			wantCode:   http.StatusCreated,
+			actions:  []models.AutomationAction{{Device: "actuator-1", Action: "turn-on"}},
+			wantCode: http.StatusCreated,
 			validateTriggerReq: func(t *testing.T) {
 				snap := triggerReq.Get()
 				assert.Equal(t, http.MethodPost, snap.Method)

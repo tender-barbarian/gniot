@@ -13,7 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tender-barbarian/gniot/service"
+	"github.com/tender-barbarian/gniotek/service"
 )
 
 type mockExecutor struct {

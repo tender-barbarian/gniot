@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tender-barbarian/gniot/service"
+	"github.com/tender-barbarian/gniotek/service"
 )
 
 type capturedRequest struct {

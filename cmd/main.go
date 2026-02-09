@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"os"
 
-	server "github.com/tender-barbarian/gniot/server"
+	server "github.com/tender-barbarian/gniotek/server"
 )
 
 func main() {

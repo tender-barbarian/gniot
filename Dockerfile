@@ -5,10 +5,10 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o gniot .
+RUN CGO_ENABLED=0 GOOS=linux go build -o gniotek .
 
 FROM alpine:3.20
 WORKDIR /root/
-COPY --from=builder /app/gniot .
+COPY --from=builder /app/gniotek .
 EXPOSE 8080
-CMD ["./gniot"]
+CMD ["./gniotek"]

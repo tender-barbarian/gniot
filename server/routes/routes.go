@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/tender-barbarian/gniot/repository"
-	"github.com/tender-barbarian/gniot/server/handlers"
+	"github.com/tender-barbarian/gniotek/repository"
+	"github.com/tender-barbarian/gniotek/server/handlers"
 	gocrud "github.com/tender-barbarian/go-crud"
 )
 
