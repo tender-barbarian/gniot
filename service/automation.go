@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tender-barbarian/gniot/repository/models"
+	"github.com/tender-barbarian/gniotek/repository/models"
 )
 
 func (s *Service) RunAutomations(ctx context.Context, interval time.Duration, errCh chan<- error) {

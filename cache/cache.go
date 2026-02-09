@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/tender-barbarian/gniot/repository"
+	"github.com/tender-barbarian/gniotek/repository"
 	gocrud "github.com/tender-barbarian/go-crud"
 )
 

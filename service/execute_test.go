@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tender-barbarian/gniot/cache"
-	"github.com/tender-barbarian/gniot/repository/models"
+	"github.com/tender-barbarian/gniotek/cache"
+	"github.com/tender-barbarian/gniotek/repository/models"
 )
 
 func TestExecute(t *testing.T) {

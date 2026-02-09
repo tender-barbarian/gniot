@@ -15,8 +15,8 @@ test-integration:
 
 # Build the application
 build:
-	go build -o bin/gniot ./cmd/gniot
+	go build -o bin/gniotek ./cmd/gniotek
 
 # Clean build artifacts
 clean:
-	rm -f tests/gniot.db
+	rm -f tests/gniotek.db

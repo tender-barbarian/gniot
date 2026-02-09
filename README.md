@@ -1,6 +1,10 @@
-# gniot
+# gniotek
 
-A lightweight IoT device management server written in Go. GNIOT allows you to register IoT devices, define actions, and execute actions on devices via JSON-RPC.
+This is a passion project which arose from the need to water my plants automatically. I could of course use an existing software but that's boring and I wanted to build something on my own.
+
+Gniotek is a play on words - gnIoTek. It's also a name (in Polish language) for a squizable anty-stress toy.
+
+As for what it does, it's a lightweight IoT device management server written in Go. It allows you to register IoT devices, define actions, execute them on demand and based on automations.
 
 ## Features
 
