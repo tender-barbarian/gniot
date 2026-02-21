@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-integration build clean
+.PHONY: test test-unit test-integration build clean run
 
 # Run all tests
 test: test-unit test-integration clean
@@ -16,6 +16,10 @@ test-integration:
 # Build the application
 build:
 	go build -o bin/gniotek ./cmd/gniotek
+
+# Run the server
+run:
+	MIGRATIONS_PATH=file://$(CURDIR)/db/migrations go run ./cmd/main.go
 
 # Clean build artifacts
 clean:
