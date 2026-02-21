@@ -103,7 +103,7 @@ func (s *Service) processOneAutomation(ctx context.Context, automation *models.A
 	}
 
 	for _, action := range definition.Actions {
-		result, err := s.executeAction(ctx, action.Device, action.Action)
+		result, err := s.executeOnDevice(ctx, action.Device, action.Action)
 		if err != nil {
 			return fmt.Errorf("executing action [%s] on device [%s]: %w", action.Action, action.Device, err)
 		}
@@ -113,7 +113,7 @@ func (s *Service) processOneAutomation(ctx context.Context, automation *models.A
 			return fmt.Errorf("update automation action last run time: %w", err)
 		}
 
-		s.logger.Info("successfully executed automation action", "automation", automation.Name, "action", action.Action, "device", action.Device, "response from device", result)
+		s.logger.Info("successfully executed automation action", "automation", automation.Name, "action", action.Action, "device", action.Device, "response from device", string(result.Result))
 	}
 
 	s.logger.Info("automation processed", "automation", automation.Name)
@@ -123,14 +123,19 @@ func (s *Service) processOneAutomation(ctx context.Context, automation *models.A
 func (s *Service) processTriggers(ctx context.Context, def *models.AutomationDefinition) ([]bool, error) {
 	var results []bool
 	for _, trigger := range def.Triggers {
-		response, err := s.executeAction(ctx, trigger.Device, trigger.Action)
+		response, err := s.executeOnDevice(ctx, trigger.Device, trigger.Action)
 		if err != nil {
 			return nil, fmt.Errorf("executing trigger, device [%s], action [%s]: %w", trigger.Device, trigger.Action, err)
 		}
 
-		s.logger.Info("successfully executed trigger", "device", trigger.Device, "action", trigger.Action, "response", response)
+		s.logger.Info("successfully executed trigger", "device", trigger.Device, "action", trigger.Action, "response", string(response.Result))
 
-		met, err := s.evaluateConditions(response, trigger)
+		var parsedResponse map[string]any
+		if err := json.Unmarshal(response.Result, &parsedResponse); err != nil {
+			return nil, fmt.Errorf("parsing trigger response, device [%s], action [%s]: %w (raw result: %s)", trigger.Device, trigger.Action, err, string(response.Result))
+		}
+
+		met, err := s.evaluateConditions(parsedResponse, trigger)
 		if err != nil {
 			return nil, fmt.Errorf("evaluating conditions for trigger [%s/%s]: %w", trigger.Device, trigger.Action, err)
 		}
@@ -140,7 +145,7 @@ func (s *Service) processTriggers(ctx context.Context, def *models.AutomationDef
 	return results, nil
 }
 
-func (s *Service) executeAction(ctx context.Context, deviceName, actionName string) (map[string]any, error) {
+func (s *Service) executeOnDevice(ctx context.Context, deviceName, actionName string) (*JSONRPCResponse, error) {
 	deviceID, err := s.devicesCache.GetIDByName(ctx, s.queryRepo, "devices", deviceName)
 	if err != nil {
 		return nil, fmt.Errorf("looking up device: %w", err)
@@ -156,13 +161,7 @@ func (s *Service) executeAction(ctx context.Context, deviceName, actionName stri
 		return nil, fmt.Errorf("executing action [%s]: %w", actionName, err)
 	}
 
-	var parsedResponse map[string]any
-	err = json.Unmarshal([]byte(response.Result), &parsedResponse)
-	if err != nil {
-		return nil, fmt.Errorf("parsing trigger response, device [%s], action [%s]: %w", deviceName, actionName, err)
-	}
-
-	return parsedResponse, nil
+	return response, nil
 }
 
 func (s *Service) evaluateConditions(response map[string]any, trigger models.AutomationTrigger) (bool, error) {
