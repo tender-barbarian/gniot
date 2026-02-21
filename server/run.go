@@ -91,8 +91,7 @@ func Run() error {
 
 	// Initialize middleware
 	var wrappedMux http.Handler = mux
-	wrappedMux = middleware.NewLoggingMiddleware(wrappedMux, logger)
-	wrappedMux = middleware.NewRecoverMiddleware(wrappedMux, logger)
+	wrappedMux = middleware.NewMiddleware(wrappedMux, logger, os.Getenv("DEBUG") == "true")
 
 	// Start server
 	httpServer := &http.Server{
